@@ -122,7 +122,7 @@
 	<build>
 		<resources>
 			<resource>
-				<targetPath>src/main/java</targetPath>
+				<targetPath>src/main/java/AJ</targetPath>
 				<directory>${basedir}/src/main/java/</directory>
 			</resource>
 		</resources>
