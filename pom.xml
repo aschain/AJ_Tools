@@ -12,11 +12,11 @@
 		<relativePath />
 	</parent>
 
-	<groupId>AJ</groupId>
-	<artifactId>AJ_Tools</artifactId>
+	<groupId>ajs.tools</groupId>
+	<artifactId>AJS_Tools</artifactId>
 	<version>0.1.0-SNAPSHOT</version>
 
-	<name>AJ Tools</name>
+	<name>AJS Tools</name>
 	<description>A Maven project implementing an ImageJ 1.x plugin.</description>
 	<url>http://sites.imagej.net/Aschain</url>
 	<inceptionYear>2017</inceptionYear>
@@ -106,8 +106,8 @@
 	</ciManagement>
 
 	<properties>
-		<package-name>AJ</package-name>
-		<main-class>AJ.TwoPhoton_Import</main-class>
+		<package-name>ajs.tools</package-name>
+		<main-class>ajs.tools.TwoPhoton_Import</main-class>
 		<license.licenseName>bsd_2</license.licenseName>
 		<license.copyrightOwners>Aaron Schain</license.copyrightOwners>
 	</properties>
@@ -122,9 +122,48 @@
 	<build>
 		<resources>
 			<resource>
+				<directory>${basedir}/src/main/resources/</directory>
+			</resource>
+			<resource>
 				<targetPath>src/main/java/AJ</targetPath>
 				<directory>${basedir}/src/main/java/</directory>
 			</resource>
 		</resources>
+		<!-- -->
+		<plugins>
+			 <plugin>
+			    <groupId>org.codehaus.mojo</groupId>
+			    <artifactId>exec-maven-plugin</artifactId>
+			    <executions>
+			      <execution>
+			      	<id>first-execution</id>
+			        <phase>install</phase>
+			        <goals>
+			           <goal>exec</goal>
+			        </goals>
+			        <configuration>
+			          <executable>copy-over.bat</executable>
+			          <workingDirectory>${basedir}/target/</workingDirectory>
+			        </configuration>
+			      </execution>
+			      <!-- 
+			      <execution>
+			      	<id>second-execution</id>
+			        <phase>install</phase>
+			        <goals>
+			           <goal>exec</goal>
+			        </goals>
+			        <configuration>
+			          <executable>cmd</executable>
+			          <arguments>\C</arguments>
+			          <arguments>\"start</arguments>
+			          <arguments>C:\Users\aschain\Documents\Fiji.app\ImageJ-win64.exe\"</arguments>
+			        </configuration>
+			      </execution>
+			       -->
+			    </executions>
+			  </plugin>
+		</plugins>
+		<!-- -->
 	</build>
 </project>

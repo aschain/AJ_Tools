@@ -1,4 +1,4 @@
-package AJ;
+package ajs.tools;
 import ij.plugin.PlugIn;
 import ij.gui.*;
 import ij.*;
@@ -33,9 +33,8 @@ public class Slicelabel_Transfer implements PlugIn {
 		IJ.showStatus("Slicelabel_transfer");
 		ImagePlus simp=WindowManager.getCurrentImage();
 		if(simp==null){IJ.showStatus("No open images"); return;}
-		ImageStack imgst=simp.getStack();
 		//String marg=Macro.getOptions();
-		String title,adder,preadder="",postadder="";
+		String title,adder;
 		boolean prependadder=false;
 		int offset=1;
 		
@@ -60,10 +59,6 @@ public class Slicelabel_Transfer implements PlugIn {
 		offset=((int) gd.getNextNumber());
 			
 		offset--;
-        if(!(adder==null || adder.equals(""))){
-        	if(prependadder)preadder=adder+"\n";
-        	else postadder="\n"+adder;
-        }
 		ImagePlus timp=WindowManager.getImage(title);
 		
 		if(timp==null) {
@@ -74,6 +69,23 @@ public class Slicelabel_Transfer implements PlugIn {
 			//}
 			return;
 		}
+		transferSliceLabels(simp, timp, offset, adder, prependadder);
+	}
+	
+	public static void transferSliceLabels(ImagePlus simp, ImagePlus timp) {
+		transferSliceLabels(simp, timp, 0, "", true);
+	}
+	
+	public static void transferSliceLabels(ImagePlus simp, ImagePlus timp, int offset, String adder, Boolean prepend) {
+		
+		ImageStack imgst=simp.getStack();
+		String preadder="", postadder="";
+		
+        if(adder!=null && !adder.equals("")){
+        	if(prepend)preadder=adder+"\n";
+        	else postadder="\n"+adder;
+        }
+
 		int chs=simp.getNChannels(); int sls=simp.getNSlices(); int frms=simp.getNFrames();
 		int cht=timp.getNChannels(); int slt=timp.getNSlices(); int frmt=timp.getNFrames();
 		if(frms > frmt-offset) {IJ.showStatus("Incomplete transfer-- only room for "+(frmt-offset));}
