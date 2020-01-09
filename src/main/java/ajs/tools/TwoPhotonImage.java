@@ -911,6 +911,7 @@ public class TwoPhotonImage implements AdjustmentListener{
 	
 	public static void updateImageSliceTimes(ImagePlus imp, String dir, String starttimestr) {
 		IJ.showStatus("Loading Image Slice Times");
+		long sms=System.currentTimeMillis();
 		if(imp==null)imp=WindowManager.getCurrentImage();
 		if(imp==null) {IJ.error("No image"); return;}
 		String directory;
@@ -953,6 +954,7 @@ public class TwoPhotonImage implements AdjustmentListener{
 				}else {IJ.log("Slice "+(i+1)+" was empty"); return;}
 			}
 			IJ.showStatus("Completed addition of pty slice times!");
+			IJ.log("STs took: "+(System.currentTimeMillis()-sms)/1000.0);
 		}else IJ.error("Oif file needs slice labels");
 		
 	}
