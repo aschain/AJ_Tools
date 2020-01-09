@@ -936,7 +936,6 @@ public class TwoPhotonImage implements AdjustmentListener{
 		//ptypaths=new String[nSlices];
 		if(labels!=null && labels.length>0) {
 			for(int i=0;i<nSlices;i++) {
-				if(!imp.isVisible())return;//image closed
 				String sllabel=labels[i];
 				if(sllabel!=null){
 					String[] label=sllabel.split("\n");
@@ -950,11 +949,18 @@ public class TwoPhotonImage implements AdjustmentListener{
 					if(!sllabel.endsWith("\n") && !"".contentEquals(sllabel))sllabel+="\n";
 					sllabel+="ptytime: "+slicetime;
 					if(starttime>0)sllabel+="\nStarttime: "+starttime;
+					if(!imp.isVisible())return;//image closed
 					imst.setSliceLabel(sllabel,i+1);
 				}else {IJ.log("Slice "+(i+1)+" was empty"); return;}
+				IJ.showProgress((double)i/(double)(nSlices-1));
 			}
 			IJ.showStatus("Completed addition of pty slice times!");
-			IJ.log("STs took: "+(System.currentTimeMillis()-sms)/1000.0);
+			String log=IJ.getLog();
+			if(log!=null) {
+				String[] logs=log.split("\n");
+				String ll=logs[logs.length-1];
+				if(ll.startsWith("LoadImage"))IJ.log("\\Update:"+ll+"  STs took: "+(System.currentTimeMillis()-sms)/1000.0);
+			}else IJ.log("STs took: "+(System.currentTimeMillis()-sms)/1000.0);
 		}else IJ.error("Oif file needs slice labels");
 		
 	}
