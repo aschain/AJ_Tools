@@ -35,7 +35,7 @@ public class Slicelabel_Transfer implements PlugIn {
 		if(simp==null){IJ.showStatus("No open images"); return;}
 		//String marg=Macro.getOptions();
 		String title,adder;
-		boolean prependadder=false;
+		boolean prependadder=false,averaged=false;
 		int offset=1;
 		
 		//dialog
@@ -49,6 +49,7 @@ public class Slicelabel_Transfer implements PlugIn {
 		gd.addStringField("Additional label:","");
 		gd.addCheckbox("Prepend", prependadder);
 		gd.addNumericField("Begin on target frame:",offset, 0);
+		gd.addCheckbox("New image averaged instead of truncated", averaged);
 		gd.showDialog();
 		if (gd.wasCanceled())
 			return;
@@ -57,6 +58,7 @@ public class Slicelabel_Transfer implements PlugIn {
 		prependadder=gd.getNextBoolean();
 		if(adder==null) adder="";
 		offset=((int) gd.getNextNumber());
+		averaged=gd.getNextBoolean();
 			
 		offset--;
 		ImagePlus timp=WindowManager.getImage(title);
@@ -69,14 +71,14 @@ public class Slicelabel_Transfer implements PlugIn {
 			//}
 			return;
 		}
-		transferSliceLabels(simp, timp, offset, adder, prependadder);
+		transferSliceLabels(simp, timp, offset, adder, prependadder, averaged);
 	}
 	
 	public static void transferSliceLabels(ImagePlus simp, ImagePlus timp) {
-		transferSliceLabels(simp, timp, 0, "", true);
+		transferSliceLabels(simp, timp, 0, "", true, false);
 	}
 	
-	public static void transferSliceLabels(ImagePlus simp, ImagePlus timp, int offset, String adder, Boolean prepend) {
+	public static void transferSliceLabels(ImagePlus simp, ImagePlus timp, int offset, String adder, Boolean prepend, Boolean averaged) {
 		
 		ImageStack imgst=simp.getStack();
 		String preadder="", postadder="";
@@ -91,6 +93,16 @@ public class Slicelabel_Transfer implements PlugIn {
 		if(frms > frmt-offset) {IJ.showStatus("Incomplete transfer-- only room for "+(frmt-offset));}
 		//if(frms != frmt-offset) {IJ.log("Warning: frame mismatch");}
 		
+
+		int chx=1,slx=1,frx=1;
+		if(averaged) {
+			if(offset>0) {IJ.showMessage("Can't do averaged stack with offset");return;}
+			chx=chs/cht; slx=sls/slt; frx=frms/frmt;
+			if(chx==chs)chx=1; //RGB doesn't need to be averaged
+			if(slx==sls)slx=1; //MAX doesn't need to be averaged
+			if(frx==frms)frx=1; 
+		}
+		
 		String[] labels=imgst.getSliceLabels();
 		if(labels==null){
 			IJ.showStatus("Slicelabel_transfer: no labels");
@@ -103,7 +115,7 @@ public class Slicelabel_Transfer implements PlugIn {
 			for(int ch=0;ch<Math.min(chs,cht);ch++){
 				for(int sl=0;sl<Math.min(sls,slt);sl++){
 					for(int fr=0;fr<Math.min(frms,(frmt-offset));fr++){
-						temp=labels[fr*(sls*chs)+sl*chs+ch];
+						temp=labels[fr*frx*(sls*chs)+sl*slx*chs+ch*chx];
 						if(temp!=null && temp.length()>1 && temp.endsWith("\n"))temp=temp.substring(0,temp.length()-1);
 						if(temp!=null){
 							int ioz=temp.indexOf("Z");
