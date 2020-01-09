@@ -343,7 +343,8 @@ public class TwoPhotonImage implements AdjustmentListener{
 		}
 		ImagePlus newimg=new ImagePlus(paths[0]);
 		int bd=newimg.getBitDepth(); if(bd==24)bd=32;
-		ImageStack newimgst=new ImageStack(newimg.getWidth(),newimg.getHeight(),LUT.createLutFromColor(Color.white));
+		final int width=newimg.getWidth(), height=newimg.getHeight();
+		ImageStack newimgst=new ImageStack(width,height,LUT.createLutFromColor(Color.white));
 		IJ.showStatus("Loading 2P Image");
 		long sms=System.currentTimeMillis();
 		for(int i=0;i<paths.length;i++) {
@@ -353,8 +354,8 @@ public class TwoPhotonImage implements AdjustmentListener{
 			newimgst.addSlice((new File(paths[i])).getName()+"\n"+(String)adderimg.getProperty("Info"), adderimg.getProcessor());
 			adderimg.changes=false; adderimg.close();
 			if(i%100==0) {
-				double sfltime=((double)(System.currentTimeMillis()-sms))/1000.0d; sfltime=Math.max(sfltime,0.001d);
-				double mbps=((double)((bd/8)*newimg.getWidth()*newimg.getHeight()*newimg.getStackSize()))/1024.0d/1024.0d/sfltime;
+				double sfltime=((double)(System.currentTimeMillis()-sms))/1000.0; sfltime=Math.max(sfltime,0.001);
+				double mbps=((double)((bd/8)*width*height*newimg.getStackSize()))/1000000.0/sfltime;
 				IJ.showStatus("Loading 2P Image "+(int)mbps+"MB/s");
 			}
 			IJ.showProgress((double)i/(double)paths.length);
@@ -391,7 +392,7 @@ public class TwoPhotonImage implements AdjustmentListener{
 		double sfltime=((double)(System.currentTimeMillis()-sms))/1000.0d;
 		sfltime=Math.max(sfltime,0.001d);
 		int bd=img.getBitDepth(); if(bd==24)bd=32;
-		double mbps=((double)((bd/8)*img.getWidth()*img.getHeight()*img.getStackSize()))/1024.0d/1024.0d/sfltime;
+		double mbps=((double)((bd/8)*img.getWidth()*img.getHeight()*img.getStackSize()))/1000000.0/sfltime;
 		IJ.log("LoadImage took "+sfltime+"s, "+Math.round(mbps)+"MB/s");
 		
 		if(chs==1)stackluts[0]=LUT.createLutFromColor(Color.white);
@@ -949,7 +950,7 @@ public class TwoPhotonImage implements AdjustmentListener{
 					if(!sllabel.endsWith("\n") && !"".contentEquals(sllabel))sllabel+="\n";
 					sllabel+="ptytime: "+slicetime;
 					if(starttime>0)sllabel+="\nStarttime: "+starttime;
-					if(!imp.isVisible())return;//image closed
+					if(!imp.isVisible()) {IJ.showProgress(1.0); IJ.showStatus("Canceled slice times, image was closed"); return;}//image closed
 					imst.setSliceLabel(sllabel,i+1);
 				}else {IJ.log("Slice "+(i+1)+" was empty"); return;}
 				IJ.showProgress((double)i/(double)(nSlices-1));
