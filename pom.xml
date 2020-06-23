@@ -125,7 +125,7 @@
 				<directory>${basedir}/src/main/resources/</directory>
 			</resource>
 			<resource>
-				<targetPath>src/main/java/AJ</targetPath>
+				<targetPath>src/main/java/</targetPath>
 				<directory>${basedir}/src/main/java/</directory>
 			</resource>
 		</resources>
