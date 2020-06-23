@@ -318,7 +318,6 @@ public class TwoPhotonImage implements AdjustmentListener{
 	
 	ImagePlus loadImage(int tpstart, int tpend, boolean reallydotimes){
 		tpstart--;
-		//String temppath=IJ.getDirectory("temp")+"AJlist.txt";
 		int totalslices=0;
 		for(int i=0;i<slicearray.size();i++) totalslices+=slicearray.get(i);
 		int sluptoloc=0;
@@ -353,9 +352,9 @@ public class TwoPhotonImage implements AdjustmentListener{
 			else  adderimg=IJ.openImage(paths[i]);
 			newimgst.addSlice((new File(paths[i])).getName()+"\n"+(String)adderimg.getProperty("Info"), adderimg.getProcessor());
 			adderimg.changes=false; adderimg.close();
-			if(i%100==0) {
+			if(i%100==0 && i>1) {
 				double sfltime=((double)(System.currentTimeMillis()-sms))/1000.0; sfltime=Math.max(sfltime,0.001);
-				double mbps=((double)((bd/8)*width*height*newimg.getStackSize()))/1000000.0/sfltime;
+				double mbps=((double)((bd/8)*width*height*(i+1)))/1000000.0/sfltime;
 				IJ.showStatus("Loading 2P Image "+(int)mbps+"MB/s");
 			}
 			IJ.showProgress((double)i/(double)paths.length);

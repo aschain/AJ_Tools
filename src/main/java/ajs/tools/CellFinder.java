@@ -4,6 +4,7 @@ import ij.*;
 //import ij.gui.GenericDialog;
 import ij.gui.Roi;
 import ij.gui.ShapeRoi;
+import ij.gui.StackWindow;
 import ij.plugin.PlugIn;
 import ij.plugin.RoiEnlarger;
 import ij.plugin.frame.RoiManager;
@@ -18,11 +19,12 @@ public class CellFinder implements PlugIn, KeyListener {
 	
 	ArrayList<Cell> cells=new ArrayList<Cell>();
 	ImagePlus imp;
+	final public static boolean DEBUG=true;
 	public static int FUZZD=2;
 	public static int PASSES=3;
 	public static int MIN_CELL_SIZE=200;
-	public static int MAX_CELL_SIZE=15000;
-	public static int MAX_ROI_SIZE=2700;
+	public static int MAX_CELL_SIZE=150000;
+	public static int MAX_ROI_SIZE=60000;
 	private long st;
 	boolean stop=false;
 
@@ -32,7 +34,12 @@ public class CellFinder implements PlugIn, KeyListener {
 		//String title=imp.getTitle();
 		RoiManager rm=RoiManager.getRoiManager();
 		Roi[] rois=rm.getRoisAsArray();
-		if(rois==null || rois.length==0) {IJ.showMessage("Run Analyze Particles first"); return;}
+		if(rois==null || rois.length==0) {
+			if(IJ.showMessageWithCancel("AP", "Running Analyze Particles first"))
+				IJ.run("Analyze Particles...", "  show=[Bare Outlines] include add stack");
+			else
+				return;
+		}
 		
 		/*
 		GenericDialog gd = new GenericDialog("CellFinder");
@@ -45,10 +52,11 @@ public class CellFinder implements PlugIn, KeyListener {
 		FUZZD=((int) gd.getNextNumber());
 		boolean runap=true;
 		if(rois!=null && rois.length>0)runap=gd.getNextBoolean();
-		*/
 		
-		//if(runap){rm.removeAll(); IJ.wait(500); IJ.run("Analyze Particles...", "  show=[Bare Outlines] include add stack"); IJ.wait(2000);}
 		
+		if(runap){rm.removeAll(); IJ.wait(500); IJ.run("Analyze Particles...", "  show=[Bare Outlines] include add stack"); IJ.wait(2000);}
+		
+*/
 		//ImagePlus drawing=WindowManager.getImage("Drawing of "+title);
 		//if(drawing==null) IJ.showMessage("No Drawing");
 		boolean[] roiTaken=new boolean[rois.length];
@@ -57,36 +65,42 @@ public class CellFinder implements PlugIn, KeyListener {
 		for(int i=0;i<rois.length;i++) {
 			rois[i]=getShapeRoi(rois[i]);
 		}
-		IJ.log("Done converting  "+(System.currentTimeMillis()-st)+"ms");
-		IJ.log("Cellrois");
+		if(DEBUG) IJ.log("Done converting  "+(System.currentTimeMillis()-st)+"ms");
+		if(DEBUG) IJ.log("Cellrois");
 		
-		imp.getCanvas().addKeyListener(this);
+		//imp.getCanvas().addKeyListener(this);
 		
 		//First frame
 		st=System.currentTimeMillis();
 		int i=0;
+		int n=0;
 		for(i=0;i<rois.length;i++) {
 			if(stop)return;
 			Roi roi=rois[i];
 			if(getZTPos(roi)>1)break;
-			if(!isRoiWithinBounds(roi,0,MAX_ROI_SIZE))roiTaken[i]=true;
+			if(!isRoiWithinBounds(roi,0,MAX_ROI_SIZE)) {
+				if(DEBUG) IJ.log("Roi "+i+" excluded because of size");
+				roiTaken[i]=true;
+			}
 			if(!roiTaken[i]) {
 				Cell cell=new Cell(roi);
-				roiTaken[i]=true;
+				roiTaken[i]=true; n++;
+				if(DEBUG) IJ.log("New cell "+n+" with roi "+i);
 				//if(!IJ.showMessageWithCancel("CellFinder","New cell roi"+i))return;
 				for(int p=0;p<PASSES;p++) {
-					IJ.log("\\Update:New cell roi"+i+" pass "+p);
 					for(int j=i+1;j<rois.length;j++) {
 						if(stop)return;
 						if(roiTaken[j])continue;
-						Roi roi2=rois[j];
-						if(!isRoiWithinBounds(roi2,0,MAX_ROI_SIZE)) {roiTaken[j]=true; continue;}
-						if(getZTPos(roi2)>1)break;
-						roiTaken[j]=cell.addIfTouching((ShapeRoi)roi2);
+						if(!isRoiWithinBounds(rois[j],0,MAX_ROI_SIZE)) {if(DEBUG) IJ.log("Roi "+j+" excluded because of size"); roiTaken[j]=true; continue;}
+						if(getZTPos(rois[j])>1)break;
+						if(cell.addIfTouching((ShapeRoi)rois[j])){
+							roiTaken[j]=true;
+							if(DEBUG) IJ.log("Added roi "+j+" to cell "+n+" at pass "+p);
+						}
 					}
 				}
 				if(cell.isCellOk(1)) {
-					cell.finalize(1);
+					cell.smooth(1);
 					cells.add(cell);
 				}
 				//finalize cell with enlarge and shrink to get rid of lines
@@ -95,15 +109,20 @@ public class CellFinder implements PlugIn, KeyListener {
 		IJ.log("First frame took "+(System.currentTimeMillis()-st)+"ms");
 		
 		ImagePlus out=IJ.createImage("Output", "RGB white", imp.getWidth(), imp.getHeight(), imp.getNFrames());
+		StackWindow sw=new StackWindow(out);
+		sw.setVisible(true);
 		out.getCanvas().addKeyListener(this);
-		imp.getCanvas().removeKeyListener(this);
+		//imp.getCanvas().removeKeyListener(this);
 		IJ.setForegroundColor(0, 0, 0);
 		for(int c=0;c<cells.size();c++) {
 			drawCell(c, 1, out);
 		}
-		out.show();
+		//out.show();
 		IJ.log("Found "+cells.size()+" cells");
 		//Interactive part here combining cells, removing parts
+		
+		//stop=true;
+		if(stop)return;
 		
 		//2-end frames
 		IJ.log("Next frames");
@@ -128,7 +147,7 @@ public class CellFinder implements PlugIn, KeyListener {
 					if(roiTaken[i] && taken && !conflictedRois.contains(roi))conflictedRois.add(roi);
 				}
 				//if(cell.isCellOk(f)) {
-					cell.finalize(f);
+					cell.smooth(f);
 					IJ.setForegroundColor(0, 0, 0);
 					drawCell(c, f, out);
 					out.updateAndDraw();
@@ -167,8 +186,8 @@ public class CellFinder implements PlugIn, KeyListener {
 		Rectangle ob=one.getBounds();
 		Rectangle tb=two.getBounds();
 		boolean left,above;
-		left=((ob.x+ob.width)/2)<((tb.x+tb.width)/2);
-		above=((ob.y+ob.height)/2)<((tb.y+tb.height)/2);
+		left=(ob.x+ob.width)<(tb.x+tb.width);
+		above=(ob.y+ob.height)<(tb.y+tb.height);
 		//IJ.log("OB: "+ob.x+","+ob.y+","+ob.width+","+ob.height+" TB: "+tb.x+","+tb.y+","+tb.width+","+tb.height+" "+(left?"Left,":"Right,")+(above?"Above":"Below"));
 		if(left?((ob.x+ob.width+FUZZD)<(tb.x)):((tb.x+tb.width+FUZZD)<ob.x))return false;
 		if(above?((ob.y+ob.height+FUZZD)<(tb.y)):((tb.y+tb.height+FUZZD)<ob.y))return false;
@@ -210,6 +229,9 @@ public class CellFinder implements PlugIn, KeyListener {
 		if(roi==null)return false;
 		Rectangle r=roi.getBounds();
 		int area=r.width*r.height;
+		if(area<0)IJ.log("area was negative");
+		if(area==0)IJ.log("area was 0");
+		if(area>max)IJ.log("area was greater than max");
 		return (area>min && area<max);
 	}
 	
@@ -290,6 +312,7 @@ public class CellFinder implements PlugIn, KeyListener {
 					else cellShapes[frame-1]=cellShapes[frame-1].or(new ShapeRoi(roi));
 				}
 			}
+			smooth(frame);
 		}
 		
 		public void remakeShapes() {
@@ -306,13 +329,13 @@ public class CellFinder implements PlugIn, KeyListener {
 			
 		}
 		
-		public void finalize(int frame) {
+		public void smooth(int frame) {
 			if(cellShapes[frame-1]!=null) {
 				cellShapes[frame-1]=enlargeRoi(enlargeRoi(cellShapes[frame-1],FUZZD),-FUZZD);
 			}
 		}
 		
-		public void finalize() {
+		public void buildMaxMinShapes() {
 			maxShape=cellShapes[0];
 			minShape=cellShapes[0];
 			for(int i=0;i<cellShapes.length;i++) {

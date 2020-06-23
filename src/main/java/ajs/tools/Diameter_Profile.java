@@ -14,15 +14,6 @@ import java.util.*;
 
 public class Diameter_Profile implements PlugIn {
 
-
-// This example macro demonstrates how to use the getProfile() function
-
-  // Set alt key down for vertical profile of a rectangular selection
-  //setKeyDown("alt");
- 
-  // Get profile and display values in "Results" window
-  //530x255px
-
 	final String[] THRESHLEVELS=new String[] {"Mean","Median","Mid","Top 1/3"};
 	final int ianglemax=5;
 	
