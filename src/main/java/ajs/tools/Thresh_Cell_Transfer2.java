@@ -14,7 +14,7 @@ import ij.text.*;
  * (be it that it does not require any, or that it lets the user
  * choose more than one image in a dialog).
  */
-public class Thresh_cell_transfer implements PlugIn, MouseListener, KeyListener, MouseWheelListener {
+public class Thresh_Cell_Transfer2 implements PlugIn, MouseListener, KeyListener, MouseWheelListener {
 
 	boolean done=false, gotspot=false, acceptedROI=false, gocellcomplete=false, spacepress=false, buttonpress=false;
 	boolean drawCellLabel=false;
@@ -25,10 +25,11 @@ public class Thresh_cell_transfer implements PlugIn, MouseListener, KeyListener,
 	int MYLUT=ImageProcessor.RED_LUT;
 	ImagePlus simp;
 	ImagePlus timp;
-	String title,basetitle;
+	String title;
 	String endtitle;
 	ArrayList<String> cellLabels=new ArrayList<String>();
 	String cellLabel="Unlabeled";
+	Roi[] curWand, tsel;
 	//Wand w;
 
 	
@@ -42,23 +43,19 @@ public class Thresh_cell_transfer implements PlugIn, MouseListener, KeyListener,
 	public void run(String arg) {
 		IJ.log("\\Clear");
 		IJ.log("TCT ver 0.1.7");
-		Boolean auto = false;
-        int sl=0,fr=0,sls=0,frms=0,stsize=0,stsl=0,laststsl=-1;
+        int sl=0,fr=0,frms=0,lastfr=-1;
         int xprev,yprev;
 		Roi sel;
-		Roi[] tsel;
 		Point[] xys;
-		int roin=1, troin=0;
 		String[] output;
-		String slsleft="",restitle;
+		String slsleft="";
 		GenericDialog gd;
-		ImageProcessor tip;
 
 		IJ.setForegroundColor(255,255,255);
 		simp = WindowManager.getCurrentImage();
 		if (simp==null) {IJ.log("noImage"); return;}
 		title=simp.getTitle();
-		basetitle=title.endsWith(".tif")?title.substring(0,title.length()-4):title;
+		String basetitle=title.endsWith(".tif")?title.substring(0,title.length()-4):title;
 		if(title.endsWith("-AJTCT") || title.endsWith("-AJTCT.tif")){
 			endtitle=title;
 			int indfromend;
@@ -79,72 +76,16 @@ public class Thresh_cell_transfer implements PlugIn, MouseListener, KeyListener,
 			}
 		}
         ImageWindow siw=simp.getWindow();
-		boolean dofrms=false;
 		double psize=simp.getCalibration().pixelWidth;
 
-		final String heading="Label"+"\t"+"ROI"+"\t"+"Cell#"+"\t"+"Area"+"\t"+"Perimeter"+"\t"+"Circularity"+"\t"+"X"+"\t"+"Y"+"\t"+"Mean"+"\t"+"Slice"+"\t"+"Frame"+"\t"+"Thresh";
-		restitle="ThreshCellTransfer-"+basetitle+".txt";
-		TextWindow results=(TextWindow) WindowManager.getWindow(restitle);
-		if(results==null){
-			restitle="ThreshCellTransfer-"+basetitle+".csv";
-			results=(TextWindow) WindowManager.getWindow(restitle);
-			if(results==null){restitle="ThreshCellTransfer-"+basetitle+".xls"; results=(TextWindow) WindowManager.getWindow(restitle);}
-		}
-		if(results!=null){
-			TextPanel panel=results.getTextPanel();
-			//IJ.log(""+panel.getLineCount());
-			if(!panel.getColumnHeadings().startsWith(heading) || panel.getLineCount()==0){
-				results.close();
-				results=null; panel=null;
-			}else{
-				celln=0;roin=0;
-				String[] oldline;
-				for(int i=0;i<panel.getLineCount();i++) {
-					oldline=panel.getLine(i).split("\t");
-					if(i==0){cellLabels.add(oldline[0]);}
-					else{ if(!cellLabels.contains(oldline[0]))cellLabels.add(oldline[0]); }
-					if(!oldline[1].startsWith("NA"))troin=(int)Float.parseFloat(oldline[1]);
-					if(!oldline[2].startsWith("NA"))celln=(int) Float.parseFloat(oldline[2]);
-					if(troin>roin)roin=troin;
-					//newline=""+troin+"\t"+celln+"\t"+oldline[2]+"\t"+oldline[3]+"\t"+oldline[4]+"\t"+oldline[5]+"\t"+(int)Float.parseFloat(oldline[6])+"\t"+(int)Float.parseFloat(oldline[7]);
-					//panel.setLine(i,newline);
-				}
-				celln++;roin++;
-				IJ.log("\\Update1:Using open window, roin: "+roin+" celln: "+celln);
-			}
-		}
-		if(results==null){
-			results=new TextWindow(restitle,heading,"",800,400);
-		}
+		TctTextWindow results=new TctTextWindow(basetitle);
 		if(IJ.getLog()!=null) loglength = IJ.getLog().split("\n").length;
 		if(loglength>25) {IJ.log("\\Clear"); loglength=0;}
     	sl=simp.getSlice(); fr=simp.getFrame();
-    	sls=simp.getNSlices(); frms=simp.getNFrames();
-		
-    	gd = new GenericDialog("Slices or Frames and Label");
-    	if(!cellLabels.isEmpty()){
-    		gd.addChoice("Prev labels: ",cellLabels.toArray(new String[cellLabels.size()]),cellLabels.get(cellLabels.size()-1));
-    		gd.addStringField("Or new label: ", "");
-    	}else {gd.addStringField("Cell Label: ", "Unlabeled");}
-		gd.addCheckbox("Draw Label on AJTCT stack?", drawCellLabel);
-    	if(sls>1 && frms>1) gd.addCheckbox("Cells move across frames rather than slices.",true);
-    	if(frms>1 && sls==1)dofrms=true; 
-    	//IJ.log("ch "+ch+" sl "+sl+" fr "+fr+" sls "+sls+" frms "+frms);
-    	//IJ.log("stsl "+stsl+" stsize"+stsize);
-        gd.showDialog();
-        if (gd.wasCanceled()) return;
-        if(!cellLabels.isEmpty()){
-        	cellLabel=gd.getNextChoice();
-        	String temp=gd.getNextString();
-        	if(!temp.equals(""))cellLabel=temp;
-        }else {cellLabel=gd.getNextString();}
-    	//if(!cellLabels.contains(cellLabel))cellLabels.add(cellLabel);
-		drawCellLabel=gd.getNextBoolean();
-    	if (sls>1 && frms>1) dofrms=gd.getNextBoolean();
-    	if(dofrms){stsl=fr; stsize=frms;} else {stsl=sl; stsize=sls;}
+    	frms=simp.getNFrames();
         
         if(timp==null) {
-			timp=IJ.createImage(endtitle,"8-bit composite", simp.getWidth(),simp.getHeight(), 2, 1, stsize);
+			timp=IJ.createImage(endtitle,"8-bit composite", simp.getWidth(),simp.getHeight(), 2, 1, frms);
 			if(timp==null) IJ.log("null");
 			timp.show();
 			//timp.getProcessor().invertLut();
@@ -156,22 +97,11 @@ public class Thresh_cell_transfer implements PlugIn, MouseListener, KeyListener,
 		if(timp==simp){IJ.log("Same window exiting"); return;}
 		if(timp==null){IJ.log("No target window"); return;}
 
-		addLabel(cellLabel);
+    	askCellLabel();
 		
 		double cthresh=simp.getProcessor().getMinThreshold();
 		if(cthresh>0)prevthresh=cthresh;
 
-        
-		//gd = new GenericDialog("Automating");
-        //gd.addMessage("Automatically do all slices?");
-        //gd.enableYesNoCancel("Yes", "No");
-        //gd.showDialog();
-       // if (gd.wasCanceled())
-       // 	return;
-        //else if (gd.wasOKed())
-        //    auto=true;
-        //else
-            auto=false;
         WindowManager.setWindow(timp.getWindow());
         WindowManager.setWindow(siw);
         preStrip();
@@ -181,29 +111,30 @@ public class Thresh_cell_transfer implements PlugIn, MouseListener, KeyListener,
         ic.addKeyListener(this);
         siw.removeMouseWheelListener(siw);
         siw.addMouseWheelListener(this);
+        
 		int prevsl=sl, prevfr=fr;
 		int prevcelln=-1;
 		xprev=x;yprev=y;
-        if(auto) {simp.setPosition(1,1,1);}
         boolean justfirst;
-        output=new String[stsize];
-        tsel=new Roi[stsize];
-        xys=new Point[stsize];
+        output=new String[frms];
+        curWand=new Roi[frms];
+        tsel=new Roi[frms];
+        xys=new Point[frms];
         double prevarea=0;
-        ImageStatistics imgstat;
 
         //-------loop-------------
         
         while(!done){
-        	if(dofrms) simp.setT(stsl); else simp.setZ(stsl);
+        	simp.setT(fr);
         	if(celln!=prevcelln){
-				slsleft=""; for(int i=0;i<stsize;i++) slsleft=slsleft+(i+1)+" ";
+				slsleft=""; for(int i=0;i<frms;i++) slsleft=slsleft+(i+1)+" ";
         		IJ.log("\\Update"+(loglength+0)+":Slices left:"+slsleft);
-	            output=new String[stsize];
-	            xys=new Point[stsize];
+	            output=new String[frms];
+	            xys=new Point[frms];
 	            x=-1; y=-1; xprev=x;yprev=y; 
-	            laststsl=-1;
-	            tsel=new Roi[stsize];
+	            lastfr=-1;
+	            tsel=new Roi[frms];
+	            curWand=new Roi[frms];
 	            simp.getProcessor().setThreshold(prevthresh, (double) 65535, MYLUT);
 	            prevsl=simp.getSlice(); prevfr=simp.getFrame();
         		prevcelln=celln;
@@ -213,9 +144,7 @@ public class Thresh_cell_transfer implements PlugIn, MouseListener, KeyListener,
 			while(!acceptedROI && !gocellcomplete) {
 				do{
 	        		fr=simp.getFrame(); sl=simp.getSlice();
-	        		//IJ.log("\\Update:tsl"+tsl+" stsl"+stsl);
-	        		stsl=dofrms?fr:sl;
-	        		timp.setPosition(1,labelsl,stsl);
+	        		timp.setPosition(1,labelsl,fr);
 	        		if(sl!=prevsl || fr!=prevfr) justfirst=true;
 	        		prevsl=sl; prevfr=fr;
 	        		IJ.wait(300);
@@ -223,26 +152,15 @@ public class Thresh_cell_transfer implements PlugIn, MouseListener, KeyListener,
 	        	
 		        if(((x!=xprev||y!=yprev) || justfirst) && x!=-1){
 			        xprev=x;yprev=y;
-	        		doWandRoi(simp.getProcessor());
-	        		sel=simp.getRoi();
-	        		imgstat=simp.getStatistics(127);
-	        		//if(laststsl!=-1 && prevarea>10){
+	        		sel=doWandRoi();
+	        		
+	        		//if(lastfr!=-1 && prevarea>10){
 	        		//	if(imgstat.area<(prevarea/2)){y+=10;x+=10; doWandRoi(simp.getProcessor());}
 	        		//	sel=simp.getRoi();
 	        		//}
-	        		if(justfirst &&laststsl!=-1 && xys[laststsl-1]!=null ){
+	        		if(justfirst &&lastfr!=-1 && xys[lastfr-1]!=null ){
 	        			//test if new center is farther than the area's equivalent radius away from the old center
-	        			for(int attempts=0; attempts<6; attempts++){
-		        			if(sel==null || Math.hypot((xys[laststsl-1].x-imgstat.xCentroid/psize),(xys[laststsl-1].y-imgstat.yCentroid/psize))>(Math.sqrt(prevarea/Math.PI)/psize)){
-		        				//IJ.log("Adj:"+attempts+" x:"+IJ.d2s(imgstat.xCentroid/psize,1)+" y:"+IJ.d2s(imgstat.yCentroid/psize,1)+" rad:"+IJ.d2s(Math.sqrt(prevarea/Math.PI)/psize,1)+" dist:"+IJ.d2s(Math.hypot((xys[laststsl-1].x-imgstat.xCentroid/psize),(xys[laststsl-1].y-imgstat.yCentroid/psize)),1));
-		        				if(attempts==0){x=xys[laststsl-1].x;y=xys[laststsl-1].y; }
-		        				else if(attempts==1){ y=yprev+10;x=xprev-10;}
-		        				else {y+=10;x-=10; }
-		        				doWandRoi(simp.getProcessor());
-		        				sel=simp.getRoi();
-		        				imgstat=simp.getStatistics(127);
-		        			}else attempts=6;
-	        			}
+	        			doWandRoiByPt(xys[lastfr-1], prevarea);
 	        		}
 	        		justfirst=false;
 	        		IJ.log("\\Update"+(loglength+2)+":x:"+x+" y:"+y+" z:"+sl+" fr:"+fr);
@@ -268,38 +186,38 @@ public class Thresh_cell_transfer implements PlugIn, MouseListener, KeyListener,
 			if(sel==null){
 				IJ.log("No selection");
 			}else if(!gocellcomplete){
-				imgstat=simp.getStatistics(127);
+				ImageStatistics imgstat=simp.getStatistics(127);
 				double perimeter,circularity;
 				perimeter=simp.getRoi().getLength();
 				circularity = perimeter==0.0?0.0:4.0*Math.PI*(imgstat.area/(perimeter*perimeter));
 				prevarea=imgstat.area;
-				IJ.log("\\Update"+(loglength+1)+":Lbl: "+cellLabel+" Cell: "+celln+" Sl: "+stsl+" Area: "+IJ.d2s(imgstat.area)+" Mean: "+IJ.d2s(imgstat.mean)+" X: "+IJ.d2s(imgstat.xCentroid)+" Y: "+IJ.d2s(imgstat.yCentroid)+" thresh: "+prevthresh);
-				output[stsl-1]=""+cellLabel+"\t"+roin+"\t"+celln+"\t"+imgstat.area+"\t"+perimeter+"\t"+circularity+"\t"+imgstat.xCentroid+"\t"+imgstat.yCentroid+"\t"+imgstat.mean+"\t"+sl+"\t"+fr+"\t"+prevthresh;
+				IJ.log("\\Update"+(loglength+1)+":Lbl: "+cellLabel+" Cell: "+celln+" Sl: "+fr+" Area: "+IJ.d2s(imgstat.area)+" Mean: "+IJ.d2s(imgstat.mean)+" X: "+IJ.d2s(imgstat.xCentroid)+" Y: "+IJ.d2s(imgstat.yCentroid)+" thresh: "+prevthresh);
+				output[fr-1]=""+cellLabel+"\t"+results.roin+"\t"+celln+"\t"+imgstat.area+"\t"+perimeter+"\t"+circularity+"\t"+imgstat.xCentroid+"\t"+imgstat.yCentroid+"\t"+imgstat.mean+"\t"+sl+"\t"+fr+"\t"+prevthresh;
 
 				x=(int)(imgstat.roiX/psize);
 				y=(int)(imgstat.roiY/psize);
-				xys[stsl-1]=new Point((int)(imgstat.xCentroid/psize),(int)(imgstat.yCentroid/psize));
+				xys[fr-1]=new Point((int)(imgstat.xCentroid/psize),(int)(imgstat.yCentroid/psize));
 				//WindowManager.setWindow(timp.getWindow());
-				timp.setPosition(1,labelsl,stsl);
-				if(tsel[stsl-1]!=null){
-					timp.setRoi(tsel[stsl-1]);
-					tip=timp.getProcessor();
+				timp.setPosition(1,labelsl,fr);
+				if(tsel[fr-1]!=null){
+					timp.setRoi(tsel[fr-1]);
+					ImageProcessor tip=timp.getProcessor();
 					tip.setColor(0);
-					tip.fill(tsel[stsl-1]);
+					tip.fill(tsel[fr-1]);
 					IJ.wait(100);
 					timp.deleteRoi();
-					tsel[stsl-1]=null;
+					tsel[fr-1]=null;
 				}
-				tsel[stsl-1]=(ij.gui.Roi) sel.clone();
-				tsel[stsl-1].setImage(timp);
-				timp.setRoi(tsel[stsl-1]);
-				timp.setPosition(1,labelsl,stsl);
-				tip=timp.getProcessor();
+				tsel[fr-1]=(ij.gui.Roi) sel.clone();
+				tsel[fr-1].setImage(timp);
+				timp.setRoi(tsel[fr-1]);
+				timp.setPosition(1,labelsl,fr);
+				ImageProcessor tip=timp.getProcessor();
 				tip.setColor(255);
-				tip.fill(tsel[stsl-1]);
-				tsel[stsl-1]=ij.plugin.RoiEnlarger.enlarge(tsel[stsl-1],1);
+				tip.fill(tsel[fr-1]);
+				tsel[fr-1]=ij.plugin.RoiEnlarger.enlarge(tsel[fr-1],1);
 				tip.setColor(0);
-				tip.draw(tsel[stsl-1]);
+				tip.draw(tsel[fr-1]);
 				tip.setColor(255);
 				timp.updateAndRepaintWindow();
 			}
@@ -315,7 +233,7 @@ public class Thresh_cell_transfer implements PlugIn, MouseListener, KeyListener,
 			boolean cellcomplete=true;
 			slsleft="";
 			int lowsl=1;
-			for(int i=stsize;i>0;i--) {if(output[i-1]==null) {cellcomplete=false; slsleft=(i)+" "+slsleft; lowsl=i;}}
+			for(int i=frms;i>0;i--) {if(output[i-1]==null) {cellcomplete=false; slsleft=(i)+" "+slsleft; lowsl=i;}}
 			if(cellcomplete || gocellcomplete){
 				gocellcomplete=false;
 				//firsthit=true;
@@ -324,12 +242,12 @@ public class Thresh_cell_transfer implements PlugIn, MouseListener, KeyListener,
 		        gd.enableYesNoCancel("Yes", "No");
 		        gd.showDialog();
 		        if (gd.wasOKed()){
-		            for(int i=0;i<stsize;i++) {
+		            for(int i=0;i<frms;i++) {
 		            	if(output[i]!=null){
 		            		results.append(output[i]);
 			            	if(xys[i]!=null){
 								timp.setPosition(2,labelsl,(i+1));
-								tip=timp.getProcessor();
+								ImageProcessor tip=timp.getProcessor();
 								String cl=""+celln;
 								if(drawCellLabel)cl=cl.concat(" "+cellLabel);
 								Roi textr=new TextRoi(xys[i].x-10,xys[i].y-20,cl);
@@ -342,18 +260,17 @@ public class Thresh_cell_transfer implements PlugIn, MouseListener, KeyListener,
 							results.append(cellLabel+"\t0\t"+celln+"\tNA\tNA\tNA\tNA\tNA\tNA\tNA\t"+(i+1)+"\t"+prevthresh);
 		            	}
 		            }
-		            timp.setPosition(1,labelsl,stsl);
+		            timp.setPosition(1,labelsl,fr);
 		            timp.updateAndRepaintWindow();
-		            celln++; stsl=0;
+		            celln++; fr=0;
 	            	sel=null; simp.deleteRoi();
 	            	timp.deleteRoi();
-		        }else auto=false;
+		        }
 			}
-	        laststsl=stsl;
-			if(stsl<stsize) stsl++; else stsl=lowsl;
-			roin++;
+	        lastfr=fr;
+			if(fr<frms) fr++; else fr=lowsl;
+			results.roin++;
 		}
-        tip=null;
         cleanup();
 	}
 
@@ -374,18 +291,17 @@ public class Thresh_cell_transfer implements PlugIn, MouseListener, KeyListener,
 
 	private void askCellLabel(){
 		GenericDialog gd = new GenericDialog("Add new cell label");
-    	if(!cellLabels.isEmpty()){
-    		gd.addChoice("Prev labels: ",cellLabels.toArray(new String[cellLabels.size()]),cellLabels.get(cellLabels.size()-1));
-    		gd.addStringField("Or new label: ", "");
-    	}else gd.addStringField("Cell Label: ", "Unlabeled");
+		ArrayList<String> askLabels=new ArrayList<String>(cellLabels);
+		if(!askLabels.contains("Dura"))askLabels.add(0, "Dura");
+		if(!askLabels.contains("Pia"))askLabels.add(1, "Pia");
+    	gd.addChoice("Labels: ",askLabels.toArray(new String[askLabels.size()]),cellLabels.isEmpty()?askLabels.get(0):cellLabels.get(cellLabels.size()-1));
+    	gd.addStringField("Or new label: ", "");
 		gd.addCheckbox("Draw Label on AJTCT stack?", drawCellLabel);
         gd.showDialog();
         if (gd.wasCanceled()) return;
-        if(!cellLabels.isEmpty()){
-        	cellLabel=gd.getNextChoice();
-        	String temp=gd.getNextString();
-        	if(!temp.equals(""))cellLabel=temp;
-        }else cellLabel=gd.getNextString();
+        cellLabel=gd.getNextChoice();
+        String temp=gd.getNextString();
+        if(!temp.equals(""))cellLabel=temp;
     	addLabel(cellLabel);
 		drawCellLabel=gd.getNextBoolean();
 	}
@@ -404,20 +320,20 @@ public class Thresh_cell_transfer implements PlugIn, MouseListener, KeyListener,
         IJ.log("Thresh Cell Tranfer complete");
 	}
 
-	public void preStrip(){
+	private void preStrip(){
 		if(simp==null)return;
 		ImageCanvas ic=simp.getCanvas();
 		ImageWindow siw=simp.getWindow();
 		KeyListener[] kls=ic.getKeyListeners();
 		for(int i=0;i<kls.length;i++) {
-			if(kls[i].getClass().getName().startsWith("Thresh_cell")){
+			if(kls[i].getClass().getName().startsWith("Thresh_Cell")){
 				ic.removeKeyListener(kls[i]);
 				IJ.log("Removed old keyL"+kls[i]);
 			}
 		}
 		MouseListener[] mls=ic.getMouseListeners();
 		for(int i=0;i<mls.length;i++) {
-			if(mls[i].getClass().getName().startsWith("Thresh_cell")){
+			if(mls[i].getClass().getName().startsWith("Thresh_Cell")){
 				ic.removeMouseListener(mls[i]);
 				IJ.log("Removed old mL"+mls[i]);
 			}
@@ -425,7 +341,7 @@ public class Thresh_cell_transfer implements PlugIn, MouseListener, KeyListener,
 		MouseWheelListener[] mwls=siw.getMouseWheelListeners();
 		boolean hasit=false;
 		for(int i=0;i<mwls.length;i++) {
-			if(mwls[i].getClass().getName().startsWith("Thresh_cell")){
+			if(mwls[i].getClass().getName().startsWith("Thresh_Cell")){
 				siw.removeMouseWheelListener(mwls[i]);
 				IJ.log("Removed old mwL"+mwls[i]);
 			}
@@ -436,9 +352,58 @@ public class Thresh_cell_transfer implements PlugIn, MouseListener, KeyListener,
 			siw.addMouseWheelListener(siw);
 		}
 	}
+	
+	class TctTextWindow{
+		TextWindow rtw;
+		public int roin;
+		
+		public TctTextWindow(String basetitle) {
+			final String heading="Label"+"\t"+"ROI"+"\t"+"Cell#"+"\t"+"Area"+"\t"+"Perimeter"+"\t"+"Circularity"+"\t"+"X"+"\t"+"Y"+"\t"+"Mean"+"\t"+"Slice"+"\t"+"Frame"+"\t"+"Thresh";
+			String restitle="ThreshCellTransfer-"+basetitle+".txt";
+			rtw=(TextWindow) WindowManager.getWindow(restitle);
+			if(rtw==null){
+				restitle="ThreshCellTransfer-"+basetitle+".csv";
+				rtw=(TextWindow) WindowManager.getWindow(restitle);
+				if(rtw==null){restitle="ThreshCellTransfer-"+basetitle+".xls"; rtw=(TextWindow) WindowManager.getWindow(restitle);}
+			}
+			if(rtw!=null){
+				TextPanel panel=rtw.getTextPanel();
+				//IJ.log(""+panel.getLineCount());
+				if(!panel.getColumnHeadings().startsWith(heading) || panel.getLineCount()==0){
+					rtw.close();
+					rtw=null; panel=null;
+				}else{
+					int troin=0;
+					celln=0;
+					String[] oldline;
+					for(int i=0;i<panel.getLineCount();i++) {
+						oldline=panel.getLine(i).split("\t");
+						if(i==0){cellLabels.add(oldline[0]);}
+						else{ if(!cellLabels.contains(oldline[0]))cellLabels.add(oldline[0]); }
+						if(!oldline[1].startsWith("NA"))troin=(int)Float.parseFloat(oldline[1]);
+						if(!oldline[2].startsWith("NA"))celln=(int) Float.parseFloat(oldline[2]);
+						if(troin>roin)roin=troin;
+						//newline=""+troin+"\t"+celln+"\t"+oldline[2]+"\t"+oldline[3]+"\t"+oldline[4]+"\t"+oldline[5]+"\t"+(int)Float.parseFloat(oldline[6])+"\t"+(int)Float.parseFloat(oldline[7]);
+						//panel.setLine(i,newline);
+					}
+					celln++;roin++;
+					IJ.log("\\Update1:Using open window, roin: "+roin+" celln: "+celln);
+				}
+			}
+			if(rtw==null){
+				rtw=new TextWindow(restitle,heading,"",800,400);
+			}
+		}
+		
+		public void append(String text) {rtw.append(text);}
+	}
+	
+	private Roi doWandRoi() {
+		return doWandRoi(simp.getProcessor());
+	}
 
-	private void doWandRoi(ImageProcessor sip){
-		if(x==-1 || y==-1) return;
+	private Roi doWandRoi(ImageProcessor sip){
+		if(x==-1 || y==-1) return null;
 		Roi sel;//,prevsel;
 		Wand w=new Wand(sip);
 		//int xd=0,yd=0;
@@ -464,7 +429,26 @@ public class Thresh_cell_transfer implements PlugIn, MouseListener, KeyListener,
 			//IJ.log("Enlarged "+temp);
 		}//else IJ.log(temp);
 		simp.setRoi(sel);
-		timp.setRoi(sel);
+		timp.setRoi((Roi)sel.clone());
+		return sel;
+	}
+	
+	private Roi doWandRoiByPt(Point pt, double prevarea) {
+		ImageStatistics imgstat;
+		Roi sel=simp.getRoi();
+		int xprev=x,yprev=y;
+		double psize=simp.getCalibration().pixelWidth;
+		for(int attempts=0; attempts<6; attempts++){
+			imgstat=simp.getStatistics(127);
+			if(sel==null || Math.hypot((pt.x-imgstat.xCentroid/psize),(pt.y-imgstat.yCentroid/psize))>(Math.sqrt(prevarea/Math.PI)/psize)){
+				//IJ.log("Adj:"+attempts+" x:"+IJ.d2s(imgstat.xCentroid/psize,1)+" y:"+IJ.d2s(imgstat.yCentroid/psize,1)+" rad:"+IJ.d2s(Math.sqrt(prevarea/Math.PI)/psize,1)+" dist:"+IJ.d2s(Math.hypot((xys[lastfr-1].x-imgstat.xCentroid/psize),(xys[lastfr-1].y-imgstat.yCentroid/psize)),1));
+				if(attempts==0){x=pt.x;y=pt.y; }
+				else if(attempts==1){ y=yprev+10;x=xprev-10;}
+				else {y+=10;x-=10; }
+				sel=doWandRoi();
+			}else break;
+		}
+		return sel;
 	}
 
 	public void finish(){
