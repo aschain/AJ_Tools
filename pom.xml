@@ -129,41 +129,29 @@
 				<directory>${basedir}/src/main/java/</directory>
 			</resource>
 		</resources>
-		<!-- -->
 		<plugins>
-			 <plugin>
-			    <groupId>org.codehaus.mojo</groupId>
-			    <artifactId>exec-maven-plugin</artifactId>
-			    <executions>
-			      <execution>
-			      	<id>first-execution</id>
-			        <phase>install</phase>
-			        <goals>
-			           <goal>exec</goal>
-			        </goals>
-			        <configuration>
-			          <executable>copy-over.bat</executable>
-			          <workingDirectory>${basedir}/target/</workingDirectory>
-			        </configuration>
-			      </execution>
-			      <!-- 
-			      <execution>
-			      	<id>second-execution</id>
-			        <phase>install</phase>
-			        <goals>
-			           <goal>exec</goal>
-			        </goals>
-			        <configuration>
-			          <executable>cmd</executable>
-			          <arguments>\C</arguments>
-			          <arguments>\"start</arguments>
-			          <arguments>C:\Users\aschain\Documents\Fiji.app\ImageJ-win64.exe\"</arguments>
-			        </configuration>
-			      </execution>
-			       -->
-			    </executions>
-			  </plugin>
+			<plugin>
+				<groupId>org.codehaus.mojo</groupId>
+				<artifactId>exec-maven-plugin</artifactId>
+				<executions>
+				  <execution>
+				  	<id>first-execution</id>
+				    <phase>install</phase>
+				    <goals>
+				       <goal>exec</goal>
+				    </goals>
+				    <configuration>
+				      <executable>../copyToFiji.bat</executable>
+				      <workingDirectory>${basedir}</workingDirectory>
+				      <arguments>
+				    	  <argument>plugins</argument>
+				    	  <argument>${artifactId}</argument>
+				    	  <argument>./target/${project.build.finalName}.jar</argument>
+				      </arguments>
+				    </configuration>
+				  </execution>
+				</executions>
+			</plugin>
 		</plugins>
-		<!-- -->
 	</build>
 </project>
