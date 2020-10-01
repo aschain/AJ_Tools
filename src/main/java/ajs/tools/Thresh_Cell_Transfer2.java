@@ -113,7 +113,7 @@ public class Thresh_Cell_Transfer2 implements PlugIn, MouseListener, KeyListener
         ic.addKeyListener(this);
         siw.removeMouseWheelListener(siw);
         siw.addMouseWheelListener(this);
-        
+        	
 		int prevsl=sl, prevfr=fr;
 		int prevcelln=-1;
 		int xprev=x, yprev=y;
@@ -152,7 +152,7 @@ public class Thresh_Cell_Transfer2 implements PlugIn, MouseListener, KeyListener
 	        		fr=simp.getFrame(); sl=simp.getSlice();
 	        		timp.setPosition(1,labelsl,fr);
 	        		if(sl!=prevsl || fr!=prevfr) {
-		        		if(postFirstAccept && curWand[fr-1]!=null) {
+		        		if(curWand[fr-1]!=null) {
 		        			if(simp.getRoi()!=curWand[fr-1]){
 		        				simp.setRoi(curWand[fr-1]);
 		        				timp.setRoi((Roi)curWand[fr-1].clone());
@@ -166,7 +166,9 @@ public class Thresh_Cell_Transfer2 implements PlugIn, MouseListener, KeyListener
 	        	
 		        if(((x!=xprev||y!=yprev) /* || justfirst*/) && x!=-1){
 			        xprev=x;yprev=y;
-	        		sel=doWandRoi();
+			        
+			        sel=doWandRoi();
+			        if(!postFirstAccept)updateCurWand();
 	        		
 	        		if(justfirst &&lastfr!=-1 && xys[lastfr-1]!=null ){
 	        			//test if new center is farther than the area's equivalent radius away from the old center
@@ -483,6 +485,7 @@ public class Thresh_Cell_Transfer2 implements PlugIn, MouseListener, KeyListener
 		for(int i=0; i<simp.getNFrames(); i++) {
 			if(i==(fr-1))continue;
 			if(tsel[i]!=null) {
+				//curWand[i]=tsel[i];
 			}else curWand[i]=doWandRoiByPt(i+1);
 			//IJ.log("curWand"+i+" "+curWand[i]);
 		}
@@ -495,6 +498,10 @@ public class Thresh_Cell_Transfer2 implements PlugIn, MouseListener, KeyListener
 			if(tsel[i]==null || (i==(cfr-1)) ) {
 				if(xys[i]!=null) {cx=xys[i].x; cy=xys[i].y;}
 				curWand[i]=doWandRoi(simp.getStack().getProcessor(simp.getStackIndex(simp.getC(), simp.getZ(), i+1)),cx,cy);
+				if(i==(cfr-1)) {
+					simp.setRoi(curWand[i]);
+					timp.setRoi((Roi)curWand[i].clone());
+				}
 			}
 		}
 	}
