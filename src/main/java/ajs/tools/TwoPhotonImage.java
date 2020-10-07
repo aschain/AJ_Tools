@@ -347,10 +347,24 @@ public class TwoPhotonImage implements AdjustmentListener{
 		IJ.showStatus("Loading 2P Image");
 		long sms=System.currentTimeMillis();
 		for(int i=0;i<paths.length;i++) {
-			ImagePlus adderimg;
+			ImagePlus adderimg=null;
+			int ni=0;
 			if(i==0) adderimg=newimg;
-			else  adderimg=IJ.openImage(paths[i]);
-			newimgst.addSlice((new File(paths[i])).getName()+"\n"+(String)adderimg.getProperty("Info"), adderimg.getProcessor());
+			else  {
+				while(adderimg==null) {
+					try{
+						adderimg=IJ.openImage(paths[i]);
+					}catch( Exception e) {
+						IJ.log("AJ error but still trying: "+e.getMessage());
+					}
+					if(adderimg==null) {
+						IJ.wait(10);
+						IJ.showStatus("Failed to open "+(ni++)+" "+paths[i]+", trying again");
+					}
+				}
+			}
+			File f=new File(paths[i]);
+			newimgst.addSlice(f.getName()+"\n"+(String)adderimg.getProperty("Info"), adderimg.getProcessor());
 			adderimg.changes=false; adderimg.close();
 			if(i%100==0 && i>1) {
 				double sfltime=((double)(System.currentTimeMillis()-sms))/1000.0; sfltime=Math.max(sfltime,0.001);
@@ -915,7 +929,7 @@ public class TwoPhotonImage implements AdjustmentListener{
 		if(imp==null)imp=WindowManager.getCurrentImage();
 		if(imp==null) {IJ.error("No image"); return;}
 		String directory;
-		String[] ptypaths;
+		//String[] ptypaths;
 		
 		if((dir!=null && !dir.isEmpty() && dir.indexOf(File.separator)>-1)) {
 			directory=dir;
