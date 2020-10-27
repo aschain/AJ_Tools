@@ -152,6 +152,7 @@ public class Thresh_Cell_Transfer2 implements PlugIn, MouseListener, KeyListener
 	        		fr=simp.getFrame(); sl=simp.getSlice();
 	        		timp.setPosition(1,labelsl,fr);
 	        		if(sl!=prevsl || fr!=prevfr) {
+	        			//IJ.log("\\Update"+(loglength+5)+":Sl"+sl+" psl"+prevsl+" fr"+fr+" pfr"+prevfr);
 		        		if(curWand[fr-1]!=null) {
 		        			if(simp.getRoi()!=curWand[fr-1]){
 		        				simp.setRoi(curWand[fr-1]);
