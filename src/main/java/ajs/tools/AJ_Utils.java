@@ -2,9 +2,74 @@ package ajs.tools;
 
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.zip.ZipEntry;
+import java.util.zip.ZipInputStream;
+
+import ij.IJ;
+import ij.gui.GenericDialog;
+import ij.plugin.PlugIn;
+
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.FileNotFoundException;
+import java.io.FilenameFilter;
+import java.lang.reflect.Method;
 import java.util.*;
 
-public class AJ_Utils{
+public class AJ_Utils implements PlugIn{
+	
+	@Override
+	public void run(String arg) {
+		List<String> classNames = new ArrayList<String>();
+		ZipInputStream zip;
+		try {
+			File pdir=new File(IJ.getDirectory("plugins"));
+			File[] ajsjar=pdir.listFiles(new FilenameFilter() {
+
+				@Override
+				public boolean accept(File arg0, String arg1) {
+					return arg1.startsWith("AJS_Tools");
+				}
+				
+			});
+			zip = new ZipInputStream(new FileInputStream(ajsjar[0]));
+			for (ZipEntry entry = zip.getNextEntry(); entry != null; entry = zip.getNextEntry()) {
+			    if (!entry.isDirectory() && entry.getName().endsWith(".class")) {
+			        // This ZipEntry represents a class. Now, what class does it represent?
+			        String className = entry.getName().replace('/', '.'); // including ".class"
+			        if(!className.contains("$") && !className.contains("AJ_Utils"))classNames.add(className.substring(0, className.length() - ".class".length()));
+			    }
+			}
+
+		} catch (Exception e) {
+			e.printStackTrace();
+		}
+		List<String> pluginNames= new ArrayList<String>();
+		for(String cls : classNames) {
+			Class<?> temp=null;
+			Method method=null;
+			try {
+				temp = Class.forName(cls);
+			}catch(Exception e) {
+				e.printStackTrace();
+			}
+			try {
+				method=temp.getMethod("run", new Class[] {String.class});
+			}catch(Exception e) {
+				
+			}
+			if(method!=null) pluginNames.add(cls.replace("ajs.tools.", ""));
+		}
+		if(pluginNames.size()>0) {
+			GenericDialog gd = new GenericDialog("Run AJS_Tools Plugin");
+			gd.addMessage("Run one of the following with argument:");
+			gd.addStringField("Argument:", "");
+			gd.addChoice("Plugin:", (String[]) pluginNames.toArray(new String[pluginNames.size()]), pluginNames.get(0));
+			gd.showDialog();
+			if(gd.wasCanceled())return;
+			IJ.runPlugIn("ajs.tools."+gd.getNextChoice(), gd.getNextString());
+		}
+	}
 	
 	public static int parseIntTP(String test){
 		return (int)parseDoubleTP(test);

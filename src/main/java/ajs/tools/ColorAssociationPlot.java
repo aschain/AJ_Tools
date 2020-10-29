@@ -27,6 +27,7 @@ public class ColorAssociationPlot implements PlugIn {
 		
 		ImagePlus imp=WindowManager.getCurrentImage();
 		Roi roi=imp.getRoi();
+		if(roi==null) {IJ.run("Select All"); roi=imp.getRoi();}
 		Point[] ps=roi.getContainedPoints();
 		Rectangle b=roi.getBounds();
 		double[] xs=new double[ps.length], ys=new double[ps.length];
