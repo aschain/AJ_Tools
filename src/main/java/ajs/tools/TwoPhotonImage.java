@@ -647,6 +647,22 @@ public class TwoPhotonImage implements AdjustmentListener{
 			if(i<xmlfile.length)pixels=getData(xmlfile[i]);
 			i=findData(xmlfile,"WidthConvertValue",i,0);
 			if(i<xmlfile.length)xysize=AJ_Utils.parseDoubleTP(getData(xmlfile[i]));
+			
+			i=findData(xmlfile, "[Corr Bright 00 Laser00",0);
+			if(i<xmlfile.length) {
+				i=findData(xmlfile, "Corr Bright 00 Laser00 ulIntensity",i);
+				lpower=getData(xmlfile[i]);
+				int temp=i,cn=0;
+				do{
+					i=temp;
+					temp=findData(xmlfile, "[Corr Bright "+String.format("%02d",++cn)+" Laser00",i);
+				}while(temp<xmlfile.length);
+				cn--;
+				if(cn>0) {
+					i=findData(xmlfile, "Corr Bright "+String.format("%02d",cn)+" Laser00 ulIntensity",i);
+					if(i<xmlfile.length)lpowerend=getData(xmlfile[i]);
+				}
+			}
 
 			//olympus stores xy stage data in the pty file in the oif.files directory sometimes
 	 		String oifdir=infofilepath+".files"+File.separator;	 		
@@ -666,7 +682,10 @@ public class TwoPhotonImage implements AdjustmentListener{
 							objective=searchAndGetData(ptyfile, "ObjectiveLens Name");
 							if(objective.equals("XLPLN      25X W  NA:1.05")) objective="25X W NA:1.05";
 							i=findData(ptyfile,"ExcitationOutPutLevel",0,0);
-							if(i<ptyfile.length) lpower=Long.toString(Math.round(AJ_Utils.parseDoubleTP(getData(ptyfile[i]))*10));
+							if(i<ptyfile.length) {
+								String temp=Long.toString(Math.round(AJ_Utils.parseDoubleTP(getData(ptyfile[i]))*10));
+								if(!"0".equals(temp))lpower=temp;
+							}
 							if(lpower=="-10")lpower="NA";
 							i=findData(ptyfile,"AbsPositionValueX",0,0);
 							if(i<ptyfile.length) xpart=Double.toString(AJ_Utils.parseDoubleTP(getData(ptyfile[i]))/1000); //oifs give position in nm
@@ -687,7 +706,10 @@ public class TwoPhotonImage implements AdjustmentListener{
 					if(ptyfile.length>0){
 						if(ch==1) {
 							i=findData(ptyfile,"ExcitationOutPutLevel",0,0);
-							if(i<ptyfile.length) lpowerend=Long.toString(Math.round(AJ_Utils.parseDoubleTP(getData(ptyfile[i]))*10));
+							if(i<ptyfile.length) {
+								String temp=Long.toString(Math.round(AJ_Utils.parseDoubleTP(getData(ptyfile[i]))*10));
+								if(!"0".equals(temp))lpowerend=temp;
+							}
 						}
 						gainends[ch-1]=searchAndGetData(ptyfile, "PMTVoltage");
 					}
@@ -1011,9 +1033,13 @@ public class TwoPhotonImage implements AdjustmentListener{
 	static String getData(String str){
 		if(str.indexOf("=")==-1) return "";
 		String[] a=str.split("="); String data=a[1];
-		if(data=="")data="\"NA\"";
+		if(data=="")data="NA";
 		if((data.indexOf("\'")>-1 || data.indexOf("\"")>-1)) data= data.substring(1,data.length()-1);
 		return data;
+	}
+	
+	static int findData(String[] xmlfile, String findtext, int starti) {
+		return findData(xmlfile, findtext, starti, 0);
 	}
 	
 	static int findData(String[] xmlfile,String findtext,int starti,int limit){

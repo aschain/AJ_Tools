@@ -16,7 +16,7 @@ import ij.text.*;
  */
 public class Thresh_Cell_Transfer2 implements PlugIn, MouseListener, KeyListener, MouseWheelListener {
 
-	boolean done=false, gotspot=false, acceptedROI=false, gocellcomplete=false, spacepress=false, buttonpress=false;
+	boolean done=false, acceptedROI=false, gocellcomplete=false, spacepress=false, buttonpress=false;
 	boolean drawCellLabel=false;
 	int x,y;
 	int goback=2, loglength=0, labelsl=0, celln=1;
@@ -25,14 +25,15 @@ public class Thresh_Cell_Transfer2 implements PlugIn, MouseListener, KeyListener
 	int MYLUT=ImageProcessor.RED_LUT;
 	ImagePlus simp;
 	ImagePlus timp;
-	String title;
-	String endtitle;
+	String title, endtitle, basetitle;
 	ArrayList<String> cellLabels=new ArrayList<String>();
 	String cellLabel="Unlabeled";
 	Roi[] curWand, tsel;
 	Point[] xys;
 	Point[] centroids;
 	double[] areas;
+	final int[] whfacs= new int[] {1,10,30};
+	int[] threshPredictions;
 	//Wand w;
 
 	
@@ -44,86 +45,31 @@ public class Thresh_Cell_Transfer2 implements PlugIn, MouseListener, KeyListener
 	 */
 	@Override
 	public void run(String arg) {
-		IJ.log("\\Clear");
-		IJ.log("TCT ver 0.1.7");
-		WindowManager.setWindow(WindowManager.getWindow("Log"));
-        int sl=0,fr=0,frms=0,lastfr=-1;
-		Roi sel;
-		String[] output;
-		String slsleft="";
-		GenericDialog gd;
+		TCT(WindowManager.getCurrentImage());
+	}
+	
+	public void TCT(ImagePlus imp) {
+		if (imp==null) {IJ.log("noImage"); return;}
+		simp=imp;
+		setup();
 
-		IJ.setForegroundColor(255,255,255);
-		simp = WindowManager.getCurrentImage();
-		if (simp==null) {IJ.log("noImage"); return;}
-		title=simp.getTitle();
-		String basetitle=title.endsWith(".tif")?title.substring(0,title.length()-4):title;
-		if(title.endsWith("-AJTCT") || title.endsWith("-AJTCT.tif")){
-			endtitle=title;
-			int indfromend;
-			if(title.endsWith("-AJTCT")) indfromend=6; else indfromend=10;
-			title=endtitle.substring(0,endtitle.length()-indfromend);
-			timp=simp;
-			simp=WindowManager.getImage(title);
-			if(simp==null)simp=WindowManager.getImage(title+".tif");
-			if(simp!=null){basetitle=title; title=title+".tif";}
-			else{IJ.error("Can't find original image: "+title); return;}
-		}
-		if(timp==null){
-			endtitle=basetitle+"-AJTCT";
-			timp=WindowManager.getImage(endtitle);
-			if(timp==null) {
-				timp=WindowManager.getImage(endtitle+".tif");
-				if(timp!=null)endtitle=endtitle+".tif";
-			}
-		}
-        ImageWindow siw=simp.getWindow();
 		double psize=simp.getCalibration().pixelWidth;
 
-		TctTextWindow results=new TctTextWindow(basetitle);
-		if(IJ.getLog()!=null) loglength = IJ.getLog().split("\n").length;
-		if(loglength>25) {IJ.log("\\Clear"); loglength=0;}
-    	sl=simp.getSlice(); fr=simp.getFrame();
-    	frms=simp.getNFrames();
-        
-        if(timp==null) {
-			timp=IJ.createImage(endtitle,"8-bit composite", simp.getWidth(),simp.getHeight(), 2, 1, frms);
-			if(timp==null) IJ.log("null");
-			timp.show();
-			//timp.getProcessor().invertLut();
-			//Rectangle tbounds=timp.getWindow().getBounds();
-        	Rectangle sbounds=siw.getBounds();
-        	//double sizefactor=sbounds.getWidth()/tbounds.getWidth();
-			timp.getWindow().setLocationAndSize((int) (sbounds.getX()+sbounds.getWidth()+5),(int) sbounds.getY(),(int) sbounds.getWidth(),65535);
-		}
-		if(timp==simp){IJ.log("Same window exiting"); return;}
-		if(timp==null){IJ.log("No target window"); return;}
-
-    	askCellLabel();
-		
-		double cthresh=simp.getProcessor().getMinThreshold();
-		if(cthresh>0)prevthresh=cthresh;
-
-        WindowManager.setWindow(timp.getWindow());
-        WindowManager.setWindow(siw);
-        preStrip();
-        ImageCanvas ic = simp.getCanvas();
-        ic.disablePopupMenu(true);
-        ic.addMouseListener(this);
-        ic.addKeyListener(this);
-        siw.removeMouseWheelListener(siw);
-        siw.addMouseWheelListener(this);
-        	
+    	int sl=simp.getSlice(), fr=simp.getFrame();
+    	int frms=simp.getNFrames();
 		int prevsl=sl, prevfr=fr;
 		int prevcelln=-1;
 		int xprev=x, yprev=y;
         boolean justfirst, postFirstAccept=false;
-        output=new String[frms];
+        String[] output=new String[frms];
         curWand=new Roi[frms];
         tsel=new Roi[frms];
         xys=new Point[frms];
         centroids=new Point[frms];
         areas=new double[frms];
+		String slsleft="";
+		TctTextWindow results=new TctTextWindow(basetitle);
+		int lastfr=-1;
 
         //-------loop-------------
         
@@ -147,6 +93,7 @@ public class Thresh_Cell_Transfer2 implements PlugIn, MouseListener, KeyListener
         	}
 			acceptedROI=false;
 			justfirst=true;
+			Roi sel;
 			while(!acceptedROI && !gocellcomplete) {
 				do{
 	        		fr=simp.getFrame(); sl=simp.getSlice();
@@ -171,7 +118,7 @@ public class Thresh_Cell_Transfer2 implements PlugIn, MouseListener, KeyListener
 			        sel=doWandRoi();
 			        if(!postFirstAccept)updateCurWand();
 	        		
-	        		if(justfirst &&lastfr!=-1 && xys[lastfr-1]!=null ){
+	        		if(justfirst && lastfr!=-1 && xys[lastfr-1]!=null ){
 	        			//test if new center is farther than the area's equivalent radius away from the old center
 	        			sel=doWandRoiByPt(fr);
 	        		}
@@ -185,7 +132,7 @@ public class Thresh_Cell_Transfer2 implements PlugIn, MouseListener, KeyListener
 			}
 			
 			if(WindowManager.getCurrentImage()!=simp){
-				gd = new GenericDialog("Cancel");
+				GenericDialog gd = new GenericDialog("Cancel");
 		        gd.addMessage("Cancel?");
 		        gd.enableYesNoCancel("Yes", "No");
 		        gd.showDialog();
@@ -258,7 +205,7 @@ public class Thresh_Cell_Transfer2 implements PlugIn, MouseListener, KeyListener
 			if(cellcomplete || gocellcomplete){
 				gocellcomplete=false;
 				//firsthit=true;
-				gd = new GenericDialog("Cancel");
+				GenericDialog gd = new GenericDialog("Cancel");
 		        gd.addMessage("All done with cell #"+celln+"?");
 		        gd.enableYesNoCancel("Yes", "No");
 		        gd.showDialog();
@@ -293,6 +240,67 @@ public class Thresh_Cell_Transfer2 implements PlugIn, MouseListener, KeyListener
 			results.roin++;
 		}
         cleanup();
+	}
+	
+	private void setup() {
+		IJ.log("\\Clear");
+		IJ.log("TCT ver 0.1.7");
+		WindowManager.setWindow(WindowManager.getWindow("Log"));
+
+		IJ.setForegroundColor(255,255,255);
+		title=simp.getTitle();
+		basetitle=title.endsWith(".tif")?title.substring(0,title.length()-4):title;
+		if(title.endsWith("-AJTCT") || title.endsWith("-AJTCT.tif")){
+			endtitle=title;
+			int indfromend;
+			if(title.endsWith("-AJTCT")) indfromend=6; else indfromend=10;
+			title=endtitle.substring(0,endtitle.length()-indfromend);
+			timp=simp;
+			simp=WindowManager.getImage(title);
+			if(simp==null)simp=WindowManager.getImage(title+".tif");
+			if(simp!=null){basetitle=title; title=title+".tif";}
+			else{IJ.error("Can't find original image: "+title); return;}
+		}
+		if(timp==null){
+			endtitle=basetitle+"-AJTCT";
+			timp=WindowManager.getImage(endtitle);
+			if(timp==null) {
+				timp=WindowManager.getImage(endtitle+".tif");
+				if(timp!=null)endtitle=endtitle+".tif";
+			}
+		}
+        ImageWindow siw=simp.getWindow();
+
+		if(IJ.getLog()!=null) loglength = IJ.getLog().split("\n").length;
+		if(loglength>25) {IJ.log("\\Clear"); loglength=0;}
+        
+        if(timp==null) {
+			timp=IJ.createImage(endtitle,"8-bit composite", simp.getWidth(),simp.getHeight(), 2, 1, simp.getNFrames());
+			if(timp==null) IJ.log("null");
+			timp.show();
+			//timp.getProcessor().invertLut();
+			//Rectangle tbounds=timp.getWindow().getBounds();
+        	Rectangle sbounds=siw.getBounds();
+        	//double sizefactor=sbounds.getWidth()/tbounds.getWidth();
+			timp.getWindow().setLocationAndSize((int) (sbounds.getX()+sbounds.getWidth()+5),(int) sbounds.getY(),(int) sbounds.getWidth(),65535);
+		}
+		if(timp==simp){IJ.log("Same window exiting"); return;}
+		if(timp==null){IJ.log("No target window"); return;}
+
+    	askCellLabel();
+		
+		double cthresh=simp.getProcessor().getMinThreshold();
+		if(cthresh>0)prevthresh=cthresh;
+
+        WindowManager.setWindow(timp.getWindow());
+        WindowManager.setWindow(siw);
+        preStrip();
+        ImageCanvas ic = simp.getCanvas();
+        ic.disablePopupMenu(true);
+        ic.addMouseListener(this);
+        ic.addKeyListener(this);
+        siw.removeMouseWheelListener(siw);
+        siw.addMouseWheelListener(this);
 	}
 
 	private void addLabel(String newlabel){
@@ -419,6 +427,111 @@ public class Thresh_Cell_Transfer2 implements PlugIn, MouseListener, KeyListener
 		public void append(String text) {rtw.append(text);}
 	}
 	
+	class TCT_Panel extends Frame{
+
+		/**
+		 * 
+		 */
+		private static final long serialVersionUID = 1L;
+		
+		public TCT_Panel() {
+			super("TCT Control Panel");
+			/*
+			 addWindowListener(new WindowAdapter(){
+				public void windowClosing(WindowEvent we){
+					recorder.stop();
+					dispose();
+				}
+			});
+			 */
+			setLayout(new GridBagLayout());
+			GridBagConstraints c = new GridBagConstraints();
+			//c.fill=GridBagConstraints.HORIZONTAL;
+			c.weightx=1; c.weighty=1;
+			c.gridx=0;c.gridy=0;
+			c.gridwidth=1;
+			String[] backstr=new String[] {"Back - None", "Back - RightClick", "Back - Space"};
+			
+			ActionListener l=new ActionListener() {
+
+				@Override
+				public void actionPerformed(ActionEvent e) {
+					switch(e.getActionCommand()){
+					case "LUT":
+						changeLutType();
+						break;
+					case "goback":
+						changeGoBack();
+						((Button)e.getSource()).setLabel(backstr[goback]);
+						break;
+					case "askCellLabel":
+						askCellLabel();
+						break;
+					case "gocellcomplete":
+						gocellcomplete=true;
+						break;
+					case "changeWheelFactor":
+						changeWheelFactor(1);
+						((Button)e.getSource()).setLabel("Wheel - "+wheelfactor);
+						break;
+					case "done":
+						done=true;
+						break;
+					default:
+						break;
+					}
+					
+				}
+				
+			};
+			
+			Button b=new Button();
+			b.setActionCommand("LUT");
+			b.setLabel("LUT");
+			b.addActionListener(l);
+			if(simp.isComposite())b.setEnabled(false);
+			add(b,c);
+			c.gridx=1;
+			b=new Button();
+			b.setActionCommand("goback");
+			b.setLabel(backstr[goback]);
+			b.addActionListener(l);
+			add(b,c);
+			c.gridx=2;
+			b=new Button();
+			b.setActionCommand("askCellLabel");
+			b.setLabel("New Cell Label");
+			b.addActionListener(l);
+			add(b,c);
+			c.gridx=3;
+			b=new Button();
+			b.setActionCommand("gocellcomplete");
+			b.setLabel("Cell complete");
+			b.addActionListener(l);
+			add(b,c);
+			c.gridx=4;
+			b=new Button();
+			b.setActionCommand("changeWheelFactor");
+			b.setLabel("Wheel - "+wheelfactor);
+			b.addActionListener(l);
+			add(b,c);
+			c.gridx=5;
+			b=new Button();
+			b.setActionCommand("gocellcomplete");
+			b.setLabel("Cell complete");
+			b.addActionListener(l);
+			add(b,c);
+			c.gridx=6;
+			b=new Button();
+			b.setActionCommand("done");
+			b.setLabel("Stop TCT");
+			b.addActionListener(l);
+			add(b,c);
+			
+		}
+		
+	}
+	
 	private Roi doWandRoi() {
 		Roi sel=doWandRoi(simp.getProcessor(),x,y);
 		simp.setRoi(sel);
@@ -436,12 +549,16 @@ public class Thresh_Cell_Transfer2 implements PlugIn, MouseListener, KeyListener
 
 		Rectangle sbs=sel.getBounds();
 		//String temp="sgw: "+simp.getWidth()+" selw: "+sbs.getWidth()+" selx: "+sbs.getX();
-		if(sel!=null && simp.getWidth()-sbs.getWidth()>20 && simp.getHeight()-sbs.getHeight()>20 && sbs.getX()>0 && sbs.getY()>0 && sbs.getWidth()>5 && sbs.getHeight()>5){
-			sel=ij.plugin.RoiEnlarger.enlarge(sel,3);
-			sel=ij.plugin.RoiEnlarger.enlarge(sel,-3);
+		if(sel!=null && sbs.getWidth()<(simp.getWidth()/2) && sbs.getHeight()<(simp.getHeight()/2) && sbs.getX()>0 && sbs.getY()>0 && sbs.getWidth()>5 && sbs.getHeight()>5){
+			sel=smoothRoi(sel);
 			//IJ.log("Enlarged "+temp);
 		}//else IJ.log(temp);
 		return sel;
+	}
+	
+	private Roi smoothRoi(Roi roi) {
+		roi=ij.plugin.RoiEnlarger.enlarge(roi,3);
+		return ij.plugin.RoiEnlarger.enlarge(roi,-3);
 	}
 	
 	private Roi doWandRoiByPt(int frame) {
@@ -514,7 +631,7 @@ public class Thresh_Cell_Transfer2 implements PlugIn, MouseListener, KeyListener
     public synchronized void mouseWheelMoved(MouseWheelEvent e) {
 		int rotation = e.getWheelRotation();
 		int amount = e.getScrollAmount();
-		boolean ctrl = (e.getModifiers()&Event.CTRL_MASK)!=0;
+		boolean ctrl = (e.getModifiersEx() & MouseEvent.CTRL_DOWN_MASK)!=0;
 		
 		/*
 			IJ.log("mouseWheelMoved: "+e);
@@ -548,22 +665,21 @@ public class Thresh_Cell_Transfer2 implements PlugIn, MouseListener, KeyListener
     public void mousePressed(MouseEvent e) { 
     	if(IJ.altKeyDown() || IJ.shiftKeyDown() || IJ.spaceBarDown()) return;
     	if(spacepress)buttonpress=true;
-        int flags = e.getModifiers();
+        int flags = e.getModifiersEx();
         //IJ.log("flags: "+flags+" Mask1: "+InputEvent.BUTTON1_MASK+" Mask2: "+InputEvent.BUTTON2_MASK+" Mask3: "+InputEvent.BUTTON3_MASK);
-        if((flags & InputEvent.BUTTON1_MASK) !=0){
+        if((flags & InputEvent.BUTTON1_DOWN_MASK) !=0){
         	Point xy = simp.getCanvas().getCursorLoc(); //because x,y position isn't exactly x,y in image
         	x=xy.x; y=xy.y;
-			gotspot=true;
         }
     }
     public void mouseReleased(MouseEvent e) {
     	if(IJ.altKeyDown() || IJ.shiftKeyDown()) return;
-    	int flags = e.getModifiers();
-        if((flags & InputEvent.BUTTON3_MASK) !=0 ){
+    	int flags = e.getModifiersEx();
+        if((flags & InputEvent.BUTTON3_DOWN_MASK) !=0 ){
 			if(goback==1){IJ.run("Previous Slice [<]");}
 			else{acceptedROI=true;}
         }
-        if((flags & InputEvent.BUTTON2_MASK) !=0 ){
+        if((flags & InputEvent.BUTTON2_DOWN_MASK) !=0 ){
 			IJ.run("Previous Slice [<]");
         }
 	} 
@@ -581,6 +697,35 @@ public class Thresh_Cell_Transfer2 implements PlugIn, MouseListener, KeyListener
        		spacepress=true;
        	}
    	}
+    
+    private void changeLutType() {
+    	MYLUT++;
+   		if(MYLUT>3)MYLUT=0;
+   		if(MYLUT==2) {
+   			ImageProcessor sip=simp.getProcessor();
+   			sip.setMinAndMax(sip.getMin(),sip.getMax());
+   		}
+    }
+    
+    private void changeGoBack() {
+    	goback++; if(goback>2)goback=0;
+    	if(goback==1) IJ.log("\\Update"+(loglength+4)+":Rightclick now goes back a frame");
+    	else if(goback==2)IJ.log("\\Update"+(loglength+4)+":Space key now goes back a frame");
+    	else IJ.log("\\Update"+(loglength+4)+":No back button");
+    }
+    
+    /**
+     * upOrDown must be 1 or -1
+     * @param upOrDown
+     */
+    private void changeWheelFactor(int upOrDown) {
+    	int i=0;
+    	for(;i<whfacs.length; i++) {
+    		if(wheelfactor<=whfacs[i]) break;
+    	}
+    	wheelfactor=whfacs[i+upOrDown];
+    }
+    
     public void keyReleased(KeyEvent e) {
         int keyCode = e.getKeyCode();
         //char keyChar = e.getKeyChar();
@@ -592,43 +737,17 @@ public class Thresh_Cell_Transfer2 implements PlugIn, MouseListener, KeyListener
        		spacepress=false; buttonpress=false;
         }
        	if(keyCode==KeyEvent.VK_F1){
-       		MYLUT++;
-       		if(MYLUT>3)MYLUT=0;
-       		if(MYLUT==2) {
-       			ImageProcessor sip=simp.getProcessor();
-       			sip.setMinAndMax(sip.getMin(),sip.getMax());
-       		}
+       		changeLutType();
        	}
         if(keyCode==KeyEvent.VK_F2){
-        	goback++; if(goback>2)goback=0;
-        	if(goback==1) IJ.log("\\Update"+(loglength+4)+":Rightclick now goes back a frame");
-        	else if(goback==2)IJ.log("\\Update"+(loglength+4)+":Space key now goes back a frame");
-        	else IJ.log("\\Update"+(loglength+4)+":No back button");
+        	changeGoBack();
         }
         if(keyCode==KeyEvent.VK_F3){
         	askCellLabel();
         }
         if(keyCode==KeyEvent.VK_F4){gocellcomplete=true;}
         if(keyCode==KeyEvent.VK_UP || keyCode==KeyEvent.VK_DOWN){
-        	if(keyCode==KeyEvent.VK_UP){
-	        	if(wheelfactor==1) wheelfactor=10;
-	        	else if(wheelfactor==10)wheelfactor=30;
-        	}else{
-	        	if(wheelfactor==30) wheelfactor=10;
-	        	else if(wheelfactor==10)wheelfactor=1;
-        		
-        	}
-        	
-			/*
-			 * int rotation=1;
-			 * if(keyCode==KeyEvent.VK_DOWN) rotation=-1;
-			 * ImageProcessor sip=simp.getProcessor();
-			 * prevthresh+=rotation;
-			 * sip.setThreshold(prevthresh, (double) 65535, MYLUT);
-	         * IJ.log("\\Update"+(loglength+3)+":MinThresh: "+simp.getProcessor().getMinThreshold());
-			 * simp.updateAndRepaintWindow();
-			 * doWandRoi(sip);
-			*/
+        	changeWheelFactor((keyCode==KeyEvent.VK_UP)?1:-1);
         }
        	if(keyCode==27) {done=true;}
    	}

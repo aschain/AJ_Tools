@@ -24,6 +24,7 @@ public class ColorAssociationPlot implements PlugIn {
 	public void run(String arg) {
 		boolean showplot=false;
 		boolean showhisto=true;
+		double notBelow=2000.0;
 		
 		ImagePlus imp=WindowManager.getCurrentImage();
 		Roi roi=imp.getRoi();
@@ -38,7 +39,7 @@ public class ColorAssociationPlot implements PlugIn {
 		for(int i=0; i<ps.length; i++){
 			xs[i]=ip2.getPixelValue(ps[i].x,ps[i].y);
 			ys[i]=ip3.getPixelValue(ps[i].x,ps[i].y);
-			rg[ps[i].y-ps[0].y][ps[i].x-ps[0].x]=(float)(ys[i]/xs[i]);
+			if(xs[i]>notBelow) rg[ps[i].y-ps[0].y][ps[i].x-ps[0].x]=(float)(ys[i]/xs[i]);
 		}
 
 		if(showplot){

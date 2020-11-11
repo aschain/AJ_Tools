@@ -24,9 +24,9 @@ public class RemoveColor implements PlugIn {
 	public void run(String arg) {
 		
 		GenericDialog gd=new GenericDialog("Remove Color Ratio");
-		gd.addNumericField("Biggest factor to divide out", 0.8, 2);
-		gd.addNumericField("Ideal Ratio to be removed", 0.6, 3);
-		gd.addNumericField("Max ratio difference", 0.5, 3);
+		gd.addNumericField("Biggest factor to divide out", 0.9, 2);
+		gd.addNumericField("Ideal Ratio to be removed", 0.56, 3);
+		gd.addNumericField("Max ratio difference", 0.7, 3);
 		gd.addNumericField("Channel to be modified (Numerator)", 2, 0);
 		gd.addNumericField("Channel to compare (denominator)", 3, 0);
 		gd.showDialog();
