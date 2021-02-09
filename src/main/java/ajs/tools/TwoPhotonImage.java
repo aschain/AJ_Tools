@@ -33,7 +33,6 @@ public class TwoPhotonImage implements AdjustmentListener{
 	//Updating variables
 	int sl=0,frstart,frend;
 	File[] fl;
-	String[] fltif;
 	
 	final int MAXCHS=4;
 
@@ -245,12 +244,13 @@ public class TwoPhotonImage implements AdjustmentListener{
 		ArrayList<String> altif=new ArrayList<String>();
 		for(int i=0;i<fl.length; i++){
 			String name=fl[i].getName();
-			if(name.endsWith(".tif") && !name.endsWith("Reference.tif")){
+			if(name.endsWith(".tif") && !name.endsWith("Reference.tif") && !name.contains("-R0")){
 				altif.add(name);
 			}
 		}
 		altif.sort(null);
-		fltif=new String[altif.size()];
+
+		String[] fltif=new String[altif.size()];
 		for(int i=0;i<altif.size();i++) fltif[i]=altif.get(i);
 		altif=null;
 		lasti=fltif.length-1;
@@ -334,7 +334,7 @@ public class TwoPhotonImage implements AdjustmentListener{
 					if(oifdo){
 						printer="s_"+(hasC?("C"+String.format("%03d",k+1)):"")+(hasZ?("Z"+String.format("%03d",j+1)):"")+(hasT?("T"+String.format("%03d",i+1)):"")+".tif";
 					}else{
-						printer=fltif[(i*chs*totalslices)+(sluptoloc*chs)+(k*slsl)+j];
+						printer=fl[(i*chs*totalslices)+(sluptoloc*chs)+(k*slsl)+j].getName();
 					}
 					paths[n++]=dir+printer;
 				}

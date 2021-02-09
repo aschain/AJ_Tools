@@ -185,6 +185,8 @@ public class CellFinder implements PlugIn, KeyListener {
 	public static boolean areRoisTouching(ShapeRoi one, ShapeRoi two){
 		Rectangle ob=one.getBounds();
 		Rectangle tb=two.getBounds();
+		
+		//First, quickly rule out rois that are not close based on bounds
 		boolean left,above;
 		left=(ob.x+ob.width)<(tb.x+tb.width);
 		above=(ob.y+ob.height)<(tb.y+tb.height);
@@ -205,6 +207,8 @@ public class CellFinder implements PlugIn, KeyListener {
 			}
 		}
 		*/
+		
+		//Then check if their areas are really within FUZZD
 		ShapeRoi sroi=(enlargeRoi(one,FUZZD)).and(enlargeRoi(two,FUZZD));
 		return (sroi!=null && (sroi.getPolygon().npoints>0));
 	}
@@ -251,6 +255,11 @@ public class CellFinder implements PlugIn, KeyListener {
 			addRoi(roi);
 		}
 		
+		/**
+		 * 
+		 * @param roi
+		 * @return true if it was touching and was added, false if not
+		 */
 		public boolean addIfTouching(ShapeRoi roi) {
 			int fr=getZTPos(roi)-1;
 			if(fr<0)IJ.log("Roi does not have Frame info: "+fr);

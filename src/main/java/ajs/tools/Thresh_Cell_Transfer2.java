@@ -16,10 +16,11 @@ import ij.text.*;
  */
 public class Thresh_Cell_Transfer2 implements PlugIn, MouseListener, KeyListener, MouseWheelListener {
 
+	final static String version="1.2.0";
 	boolean done=false, acceptedROI=false, gocellcomplete=false, spacepress=false, buttonpress=false;
 	boolean drawCellLabel=false;
 	int x,y;
-	int goback=2, loglength=0, labelsl=0, celln=1;
+	int goback=2, labelsl=0, celln=1;
 	double prevthresh=250;
 	int wheelfactor = 10;
 	int MYLUT=ImageProcessor.RED_LUT;
@@ -34,6 +35,7 @@ public class Thresh_Cell_Transfer2 implements PlugIn, MouseListener, KeyListener
 	double[] areas;
 	final int[] whfacs= new int[] {1,10,30};
 	int[] threshPredictions;
+	TCTPanel tctpanel;
 	//Wand w;
 
 	
@@ -52,6 +54,9 @@ public class Thresh_Cell_Transfer2 implements PlugIn, MouseListener, KeyListener
 		if (imp==null) {IJ.log("noImage"); return;}
 		simp=imp;
 		setup();
+
+        tctpanel=new TCTPanel();
+        tctpanel.setVisible(true);
 
 		double psize=simp.getCalibration().pixelWidth;
 
@@ -76,8 +81,8 @@ public class Thresh_Cell_Transfer2 implements PlugIn, MouseListener, KeyListener
         while(!done){
         	simp.setT(fr);
         	if(celln!=prevcelln){
-				slsleft=""; for(int i=0;i<frms;i++) slsleft=slsleft+(i+1)+" ";
-        		IJ.log("\\Update"+(loglength+0)+":Slices left:"+slsleft);
+				slsleft=""; for(int i=0;i<frms;i++) slsleft+=(i+1)+" ";
+        		tctpanel.setTextLine(0, "Slices left:"+slsleft);
 	            output=new String[frms];
 	            xys=new Point[frms];
 	            centroids=new Point[frms];
@@ -99,7 +104,7 @@ public class Thresh_Cell_Transfer2 implements PlugIn, MouseListener, KeyListener
 	        		fr=simp.getFrame(); sl=simp.getSlice();
 	        		timp.setPosition(1,labelsl,fr);
 	        		if(sl!=prevsl || fr!=prevfr) {
-	        			//IJ.log("\\Update"+(loglength+5)+":Sl"+sl+" psl"+prevsl+" fr"+fr+" pfr"+prevfr);
+	        			//tctpanel.setTextLine(5, "Sl"+sl+" psl"+prevsl+" fr"+fr+" pfr"+prevfr);
 		        		if(curWand[fr-1]!=null) {
 		        			if(simp.getRoi()!=curWand[fr-1]){
 		        				simp.setRoi(curWand[fr-1]);
@@ -124,7 +129,7 @@ public class Thresh_Cell_Transfer2 implements PlugIn, MouseListener, KeyListener
 	        		}
 	        		curWand[fr-1]=sel;
 	        		justfirst=false;
-	        		IJ.log("\\Update"+(loglength+2)+":x:"+x+" y:"+y+" z:"+sl+" fr:"+fr);
+	        		tctpanel.setTextLine(2, "x:"+x+" y:"+y+" z:"+sl+" fr:"+fr);
 		        }
 		        if(WindowManager.getWindow(title)==null || WindowManager.getWindow(endtitle)==null) {IJ.log("Window Closed"); done=true;}
     			if(done) {cleanup(); return;}
@@ -141,7 +146,7 @@ public class Thresh_Cell_Transfer2 implements PlugIn, MouseListener, KeyListener
 		        else if (gd.wasOKed()){
 		            cleanup();return;}
 			}
-			IJ.log("\\Update"+(loglength+0)+":Slices left: "+slsleft);
+			tctpanel.setTextLine(0, "Slices left: "+slsleft);
 
 			sel=simp.getRoi();
     		curWand[fr-1]=simp.getRoi();
@@ -152,7 +157,7 @@ public class Thresh_Cell_Transfer2 implements PlugIn, MouseListener, KeyListener
 				double perimeter,circularity;
 				perimeter=simp.getRoi().getLength();
 				circularity = perimeter==0.0?0.0:4.0*Math.PI*(imgstat.area/(perimeter*perimeter));
-				IJ.log("\\Update"+(loglength+1)+":Lbl: "+cellLabel+" Cell: "+celln+" Sl: "+fr+" Area: "+IJ.d2s(imgstat.area)+" Mean: "+IJ.d2s(imgstat.mean)+" X: "+IJ.d2s(imgstat.xCentroid)+" Y: "+IJ.d2s(imgstat.yCentroid)+" thresh: "+prevthresh);
+				tctpanel.setTextLine(1, "Lbl: "+cellLabel+" Cell: "+celln+" Sl: "+fr+" Area: "+IJ.d2s(imgstat.area)+" Mean: "+IJ.d2s(imgstat.mean)+" X: "+IJ.d2s(imgstat.xCentroid)+" Y: "+IJ.d2s(imgstat.yCentroid)+" thresh: "+prevthresh);
 				output[fr-1]=""+cellLabel+"\t"+results.roin+"\t"+celln+"\t"+imgstat.area+"\t"+perimeter+"\t"+circularity+"\t"+imgstat.xCentroid+"\t"+imgstat.yCentroid+"\t"+imgstat.mean+"\t"+sl+"\t"+fr+"\t"+prevthresh;
 
 				//x=(int)(imgstat.roiX/psize);
@@ -201,7 +206,10 @@ public class Thresh_Cell_Transfer2 implements PlugIn, MouseListener, KeyListener
 			boolean cellcomplete=true;
 			slsleft="";
 			int lowsl=1;
-			for(int i=frms;i>0;i--) {if(output[i-1]==null) {cellcomplete=false; slsleft=(i)+" "+slsleft; lowsl=i;}}
+			for(int i=frms;i>0;i--) {
+				if(output[i-1]==null) {cellcomplete=false; slsleft=(i)+" "+slsleft; lowsl=i;}
+				else slsleft=" ̸"+(i)+((slsleft.startsWith(" ")||slsleft.startsWith(" ̸"))?"":" ")+slsleft;
+			}
 			if(cellcomplete || gocellcomplete){
 				gocellcomplete=false;
 				//firsthit=true;
@@ -243,9 +251,6 @@ public class Thresh_Cell_Transfer2 implements PlugIn, MouseListener, KeyListener
 	}
 	
 	private void setup() {
-		IJ.log("\\Clear");
-		IJ.log("TCT ver 0.1.7");
-		WindowManager.setWindow(WindowManager.getWindow("Log"));
 
 		IJ.setForegroundColor(255,255,255);
 		title=simp.getTitle();
@@ -270,13 +275,10 @@ public class Thresh_Cell_Transfer2 implements PlugIn, MouseListener, KeyListener
 			}
 		}
         ImageWindow siw=simp.getWindow();
-
-		if(IJ.getLog()!=null) loglength = IJ.getLog().split("\n").length;
-		if(loglength>25) {IJ.log("\\Clear"); loglength=0;}
         
         if(timp==null) {
 			timp=IJ.createImage(endtitle,"8-bit composite", simp.getWidth(),simp.getHeight(), 2, 1, simp.getNFrames());
-			if(timp==null) IJ.log("null");
+			if(timp==null) IJ.log("Error - timp did not get created");
 			timp.show();
 			//timp.getProcessor().invertLut();
 			//Rectangle tbounds=timp.getWindow().getBounds();
@@ -336,6 +338,7 @@ public class Thresh_Cell_Transfer2 implements PlugIn, MouseListener, KeyListener
 	}
 
 	private void cleanup(){
+        tctpanel.dispose();
 		if(simp!=null){
 			ImageCanvas ic=simp.getCanvas();
 			if(ic!=null){
@@ -416,7 +419,7 @@ public class Thresh_Cell_Transfer2 implements PlugIn, MouseListener, KeyListener
 						//panel.setLine(i,newline);
 					}
 					celln++;roin++;
-					IJ.log("\\Update1:Using open window, roin: "+roin+" celln: "+celln);
+					IJ.log("Using open window, roin: "+roin+" celln: "+celln);
 				}
 			}
 			if(rtw==null){
@@ -427,15 +430,16 @@ public class Thresh_Cell_Transfer2 implements PlugIn, MouseListener, KeyListener
 		public void append(String text) {rtw.append(text);}
 	}
 	
-	class TCT_Panel extends Frame{
+	class TCTPanel extends Frame{
 
 		/**
 		 * 
 		 */
 		private static final long serialVersionUID = 1L;
+		TextArea ta=null;
 		
-		public TCT_Panel() {
-			super("TCT Control Panel");
+		public TCTPanel() {
+			super("TCT Control Panel version "+version);
 			/*
 			 addWindowListener(new WindowAdapter(){
 				public void windowClosing(WindowEvent we){
@@ -444,12 +448,9 @@ public class Thresh_Cell_Transfer2 implements PlugIn, MouseListener, KeyListener
 				}
 			});
 			 */
+			this.setFocusable(false);
 			setLayout(new GridBagLayout());
 			GridBagConstraints c = new GridBagConstraints();
-			//c.fill=GridBagConstraints.HORIZONTAL;
-			c.weightx=1; c.weighty=1;
-			c.gridx=0;c.gridy=0;
-			c.gridwidth=1;
 			String[] backstr=new String[] {"Back - None", "Back - RightClick", "Back - Space"};
 			
 			ActionListener l=new ActionListener() {
@@ -484,7 +485,11 @@ public class Thresh_Cell_Transfer2 implements PlugIn, MouseListener, KeyListener
 				}
 				
 			};
-			
+
+			//c.fill=GridBagConstraints.HORIZONTAL;
+			c.weightx=1; c.weighty=1;
+			c.gridx=0;c.gridy=0;
+			c.gridwidth=1; c.gridheight=1;
 			Button b=new Button();
 			b.setActionCommand("LUT");
 			b.setLabel("LUT");
@@ -527,6 +532,30 @@ public class Thresh_Cell_Transfer2 implements PlugIn, MouseListener, KeyListener
 			b.setLabel("Stop TCT");
 			b.addActionListener(l);
 			add(b,c);
+			
+			c.gridx=0; c.gridy=2; c.gridwidth=7;
+			ta=new TextArea("",6,90,TextArea.SCROLLBARS_NONE);
+			ta.setEditable(false);
+			add(ta,c);
+			
+			pack();
+		}
+		
+		/**
+		 * Set (0-index) line of text area with text
+		 * @param line
+		 * @param text
+		 */
+		public void setTextLine(int line, String text) {
+			String[] tatext=ta.getText().split("\n");
+			String out="";
+			final int max=Math.max(line,tatext.length);
+			for(int i=0;i<=max;i++) {
+				if(i==line)out+=text+"\n";
+				else if(i<tatext.length)out+=tatext[i]+"\n";
+				else out+="\n";
+			}
+			ta.setText(out);
 			
 		}
 		
@@ -610,6 +639,7 @@ public class Thresh_Cell_Transfer2 implements PlugIn, MouseListener, KeyListener
 	}
 	
 	private void simpleUpdateCurWand() {
+		if(x==-1 && y==-1)return;
 		int cx=x,cy=y;
 		int cfr=simp.getFrame();
 		for(int i=0;i<simp.getNFrames();i++) {
@@ -649,7 +679,7 @@ public class Thresh_Cell_Transfer2 implements PlugIn, MouseListener, KeyListener
 			if(prevthresh<20)wheelfactor=1;
 			prevthresh+=(rotation*amount*wheelfactor);
 			sip.setThreshold(prevthresh, (double) 65535, MYLUT);
-	        IJ.log("\\Update"+(loglength+3)+":Thresh: "+simp.getProcessor().getMinThreshold());
+			tctpanel.setTextLine(3, "Thresh: "+simp.getProcessor().getMinThreshold());
 			simp.updateAndRepaintWindow();
 			simpleUpdateCurWand();
 		} else{
@@ -709,9 +739,9 @@ public class Thresh_Cell_Transfer2 implements PlugIn, MouseListener, KeyListener
     
     private void changeGoBack() {
     	goback++; if(goback>2)goback=0;
-    	if(goback==1) IJ.log("\\Update"+(loglength+4)+":Rightclick now goes back a frame");
-    	else if(goback==2)IJ.log("\\Update"+(loglength+4)+":Space key now goes back a frame");
-    	else IJ.log("\\Update"+(loglength+4)+":No back button");
+    	if(goback==1) tctpanel.setTextLine(4, "Rightclick now goes back a frame");
+    	else if(goback==2)tctpanel.setTextLine(4, "Space key now goes back a frame");
+    	else tctpanel.setTextLine(4, "No back button");
     }
     
     /**
@@ -723,7 +753,10 @@ public class Thresh_Cell_Transfer2 implements PlugIn, MouseListener, KeyListener
     	for(;i<whfacs.length; i++) {
     		if(wheelfactor<=whfacs[i]) break;
     	}
-    	wheelfactor=whfacs[i+upOrDown];
+    	int newi=i+upOrDown;
+    	if(newi>whfacs.length)newi=0;
+    	if(newi<0)newi=whfacs.length-1;
+    	wheelfactor=whfacs[newi];
     }
     
     public void keyReleased(KeyEvent e) {
