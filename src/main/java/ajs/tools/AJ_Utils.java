@@ -74,15 +74,20 @@ public class AJ_Utils implements PlugIn{
 	public static int parseIntTP(String test){
 		return (int)parseDoubleTP(test);
 	}
-
+	
 	public static double parseDoubleTP(String test){
+		return parseDoubleTP(test, 4);
+	}
+
+	public static double parseDoubleTP(String test, int digits){
 		double result=-1.0;
 		try{
 			result = Double.parseDouble(test);
-			result=(double)Math.round(result*10000d)/10000d;
+			result=(double)Math.round(result*Math.pow(10d, digits))/Math.pow(10d, digits);
 		}catch(Exception e){}
 		return result;
 	}
+	
 	/**
 	 * Returns milis from epoch (Jan 1 1970)
 	 * 
