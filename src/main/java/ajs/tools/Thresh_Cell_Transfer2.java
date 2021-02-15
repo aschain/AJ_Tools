@@ -1,7 +1,8 @@
 package ajs.tools;
 
-import ij.plugin.PlugIn;
+import ij.plugin.*;
 import ij.gui.*;
+import ij.measure.Calibration;
 import ij.*;
 import java.awt.*;
 import java.awt.event.*;
@@ -16,6 +17,11 @@ import ij.text.*;
  */
 public class Thresh_Cell_Transfer2 implements PlugIn, MouseListener, KeyListener, MouseWheelListener {
 	
+	/**TODO
+	 *  ucwFrs[frame-1]
+	 *  auto function where acceptedROI goes through until ucwFrs is false
+	 */
+	
 	final static String version="1.2.0";
 	final static boolean DEBUG=false;
 	boolean done=false, acceptedROI=false, gocellcomplete=false, spacepress=false;
@@ -26,8 +32,8 @@ public class Thresh_Cell_Transfer2 implements PlugIn, MouseListener, KeyListener
 	double prevthresh=250;
 	int wheelfactor = 10;
 	int MYLUT=ImageProcessor.RED_LUT;
-	ImagePlus simp;
-	ImagePlus timp;
+	private ImagePlus simp;
+	private ImagePlus timp;
 	String title, endtitle, basetitle;
 	ArrayList<String> cellLabels=new ArrayList<String>();
 	String cellLabel="Unlabeled";
@@ -38,29 +44,23 @@ public class Thresh_Cell_Transfer2 implements PlugIn, MouseListener, KeyListener
 	final int[] whfacs= new int[] {1,10,30};
 	int[] threshPredictions;
 	TCTPanel tctpanel;
+	MyThread updateCurWandThread=null;
+	boolean[] ucwFrs;
 	//Wand w;
-
 	
-	/**
-	 * This method gets called by ImageJ / Fiji.C
-	 *
-	 * @param arg can be specified in plugins.config
-	 * @see ij.plugin.PlugIn#run(java.lang.String)
-	 */
-	@Override
 	public void run(String arg) {
 		TCT(WindowManager.getCurrentImage());
 	}
 	
 	public void TCT(ImagePlus imp) {
-		if (imp==null) {IJ.log("noImage"); return;}
 		simp=imp;
+		if (simp==null) {IJ.log("noImage"); return;}
 		setup();
 
         tctpanel=new TCTPanel();
         tctpanel.setVisible(true);
 
-		double psize=simp.getCalibration().pixelWidth;
+		Calibration cal=simp.getCalibration();
 
     	int sl=simp.getSlice(), fr=simp.getFrame();
     	int frms=simp.getNFrames();
@@ -69,11 +69,6 @@ public class Thresh_Cell_Transfer2 implements PlugIn, MouseListener, KeyListener
 		int xprev=x, yprev=y;
         boolean justfirst, postFirstAccept=false;
         String[] output=new String[frms];
-        curWand=new Roi[frms];
-        tsel=new Roi[frms];
-        xys=new Point[frms];
-        centroids=new Point[frms];
-        areas=new double[frms];
 		String slsleft="";
 		TctTextWindow results=new TctTextWindow(basetitle);
 		if("Unlabeled".equals(cellLabel)) askCellLabel();
@@ -87,13 +82,14 @@ public class Thresh_Cell_Transfer2 implements PlugIn, MouseListener, KeyListener
 				slsleft=""; for(int i=0;i<frms;i++) slsleft+=(i+1)+" ";
         		tctpanel.setTextLine(4, "Slices left:"+slsleft);
 	            output=new String[frms];
-	            xys=new Point[frms];
-	            centroids=new Point[frms];
 	            x=-1; y=-1; xprev=x;yprev=y; 
 	            lastfr=-1;
-	            tsel=new Roi[frms];
 	            curWand=new Roi[frms];
+	            tsel=new Roi[frms];
+	            xys=new Point[frms];
+	            centroids=new Point[frms];
 	            areas=new double[frms];
+	            ucwFrs=new boolean[frms];
 	            postFirstAccept=false;
 	            simp.getProcessor().setThreshold(prevthresh, (double) 65535, MYLUT);
 	            prevsl=simp.getSlice(); prevfr=simp.getFrame();
@@ -158,12 +154,13 @@ public class Thresh_Cell_Transfer2 implements PlugIn, MouseListener, KeyListener
 			}
 			tctpanel.setTextLine(4, "Slices left: "+slsleft);
 
-			sel=simp.getRoi();
     		curWand[fr-1]=simp.getRoi();
-			if(sel==null){
+			if(curWand[fr-1]==null){
 				IJ.log("No selection");
 			}else if(!gocellcomplete){
-				ImageStatistics imgstat=simp.getStatistics(127);
+				ImageProcessor ip=simp.getProcessor();
+				ip.setRoi(curWand[fr-1]);
+				ImageStatistics imgstat=ImageStatistics.getStatistics(ip, 127, cal);
 				double perimeter,circularity;
 				perimeter=simp.getRoi().getLength();
 				circularity = perimeter==0.0?0.0:4.0*Math.PI*(imgstat.area/(perimeter*perimeter));
@@ -172,7 +169,7 @@ public class Thresh_Cell_Transfer2 implements PlugIn, MouseListener, KeyListener
 				
 				//x=(int)(imgstat.roiX/psize);
 				//y=(int)(imgstat.roiY/psize);
-				centroids[fr-1]=new Point((int)(imgstat.xCentroid/psize),(int)(imgstat.yCentroid/psize));
+				centroids[fr-1]=new Point((int)(imgstat.xCentroid/cal.pixelWidth),(int)(imgstat.yCentroid/cal.pixelHeight));
 				areas[fr-1]=imgstat.area;
 				//WindowManager.setWindow(timp.getWindow());
 				timp.setPosition(1,labelsl,fr);
@@ -183,27 +180,14 @@ public class Thresh_Cell_Transfer2 implements PlugIn, MouseListener, KeyListener
 					timp.deleteRoi();
 					tsel[fr-1]=null;
 				}
-				tsel[fr-1]=(ij.gui.Roi) sel.clone();
+				tsel[fr-1]=(ij.gui.Roi) curWand[fr-1].clone();
 				tsel[fr-1].setImage(timp);
 				tsel[fr-1].setPosition(1, labelsl, fr);
 				tsel[fr-1].setFillColor(new Color(255,100,0));
 				timp.setPosition(1,labelsl,fr);
 				tov.add(tsel[fr-1]);
-				/*timp.setRoi(tsel[fr-1]);
-				ImageProcessor tip=timp.getProcessor();
-				tip.setColor(255);
-				tip.fill(tsel[fr-1]);
-				tsel[fr-1]=ij.plugin.RoiEnlarger.enlarge(tsel[fr-1],1);
-				tip.setColor(0);
-				tip.draw(tsel[fr-1]);
-				tip.setColor(255);*/
 				timp.updateAndRepaintWindow();
-				
-				if(!postFirstAccept) {
-					postFirstAccept=true;
-					curWand[fr-1]=sel;
-					updateCurWand();
-				}
+				postFirstAccept=true;
 			}
 			
 			long startpresstime=System.nanoTime();
@@ -643,7 +627,7 @@ public class Thresh_Cell_Transfer2 implements PlugIn, MouseListener, KeyListener
 	private Roi doWandRoiByPt(int frame) {
 		ImageStatistics imgstat;
 		ImageProcessor ip=simp.getStack().getProcessor(simp.getStackIndex(simp.getC(), simp.getZ(), frame));
-		ij.measure.Calibration cal=simp.getCalibration();
+		Calibration cal=simp.getCalibration();
 		double prevarea=simp.getStatistics(127).area;
 		Roi sel=null;
 		double psize=cal.pixelWidth;
@@ -657,6 +641,8 @@ public class Thresh_Cell_Transfer2 implements PlugIn, MouseListener, KeyListener
 				if(centroids[i]!=null) {pt=centroids[i]; prevarea=areas[i]; break;}
 			}
 		}
+
+        ucwFrs[frame-1]=false;
 		if(pt==null)return doWandRoi(ip,cx,cy); 
 		for(int attempts=0; attempts<6; attempts++){
 			boolean isok=false;
@@ -664,7 +650,10 @@ public class Thresh_Cell_Transfer2 implements PlugIn, MouseListener, KeyListener
 			if(sel!=null){
 				ip.setRoi(sel);
 				imgstat=ImageStatistics.getStatistics(ip, 127, cal);
-				if(Math.hypot((pt.x-imgstat.xCentroid/psize),(pt.y-imgstat.yCentroid/psize))<(Math.sqrt(prevarea/Math.PI)/psize)) isok=true;
+				if(Math.hypot((pt.x-imgstat.xCentroid/psize),(pt.y-imgstat.yCentroid/psize))<(Math.sqrt(prevarea/Math.PI)/psize)) {
+					isok=true;
+					 ucwFrs[frame-1]=true;
+				}
 			}
 			if(!isok) {
 				if(attempts==0){cx=pt.x; cy=pt.y;}
@@ -678,13 +667,28 @@ public class Thresh_Cell_Transfer2 implements PlugIn, MouseListener, KeyListener
 	}
 	
 	private void updateCurWand() {
-		int fr=simp.getFrame();
-		for(int i=0; i<simp.getNFrames(); i++) {
-			if(i==(fr-1))continue;
-			if(tsel[i]!=null) {
-				//curWand[i]=tsel[i];
-			}else curWand[i]=doWandRoiByPt(i+1);
-			//IJ.log("curWand"+i+" "+curWand[i]);
+		final int fr=simp.getFrame();
+		if(updateCurWandThread!=null)updateCurWandThread.stopThis();
+		updateCurWandThread=new MyThread() {
+			
+			public void run() {
+				for(int i=0; i<simp.getNFrames(); i++) {
+					if(shouldStop)break;
+					if(i==(fr-1))continue;
+					if(tsel[i]!=null) {
+						//curWand[i]=tsel[i];
+					}else curWand[i]=doWandRoiByPt(i+1);
+					//IJ.log("curWand"+i+" "+curWand[i]);
+				}
+			}
+		};
+		updateCurWandThread.run();
+	}
+	
+	class MyThread extends Thread{
+		boolean shouldStop=false;
+		public void stopThis() {
+			shouldStop=true;
 		}
 	}
 	
